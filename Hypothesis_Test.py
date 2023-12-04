@@ -154,7 +154,7 @@ def run_inference():
     alpha = st.session_state["alpha"]
     variation_groups = st.session_state["variation_groups"]
     n_tests = len(variation_groups)
-    experiment = Experiment(st.session_state.dataframe)
+    experiment = Experiment(st.session_state.data)
     tests = []
     test_results = []
     for ii, vg in enumerate(variation_groups):
@@ -225,6 +225,7 @@ load_dataset(dataset_file)
 
 if st.session_state.get("dataframe") is not None:
     st.dataframe(st.session_state.dataframe)
+    st.session_state["data"] = st.session_state["dataframe"].copy()
 
     if st.session_state.get("available_data_columns") is not None:
         """#### 🔍 Specify Data Columns"""
@@ -239,8 +240,12 @@ if st.session_state.get("dataframe") is not None:
 
         inferred_variable_type = "continuous"
         if st.session_state.get("metric_column") is not None:
+            # Filter out any invalid metric rows
+            valid_metric_mask = st.session_state["data"][metric_column].notnull()
+            st.session_state["data"] = st.session_state["data"][valid_metric_mask]
+
             inferred_variable_type = infer_variable_type(
-                st.session_state.dataframe[metric_column]
+                st.session_state["data"][metric_column]
             )
         VARIABLE_TYPES = ("binary", "continuous", "counts")
         with vtcol:
@@ -260,10 +265,14 @@ if st.session_state.get("dataframe") is not None:
             )
 
         if treatment_column is not None:
+            # Filter out any invalid treatment rows
+            valid_treatment_mask = st.session_state["data"][treatment_column].notnull()
+            st.session_state["data"] = st.session_state["data"][valid_treatment_mask]
+
             ccol, vcol = st.columns(2)
 
             treatment_columns = sorted(
-                st.session_state["dataframe"][treatment_column].unique()
+                st.session_state["data"][treatment_column].unique()
             )
 
             old_control_group = st.session_state.get("control_group")
@@ -300,7 +309,7 @@ if st.session_state.get("dataframe") is not None:
             st.session_state["n_variations"] = len(variation_groups)
 
             control_samples = get_samples(
-                st.session_state.dataframe,
+                st.session_state.data,
                 st.session_state.metric_column,
                 st.session_state.treatment_column,
                 st.session_state.control_group,
@@ -309,7 +318,7 @@ if st.session_state.get("dataframe") is not None:
             for treatment_name in st.session_state["variation_groups"]:
                 variation_samples.append(
                     get_samples(
-                        st.session_state.dataframe,
+                        st.session_state.data,
                         st.session_state.metric_column,
                         st.session_state.treatment_column,
                         treatment_name,
