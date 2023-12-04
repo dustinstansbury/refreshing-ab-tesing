@@ -1,9 +1,11 @@
-import streamlit as st
 import numpy as np
 import scipy as sp
 import pandas as pd
 
+import streamlit as st
 import holoviews as hv
+
+from collections import OrderedDict
 
 from spearmint.experiment import Experiment
 from spearmint.hypothesis_test import HypothesisTest, HypothesisTestGroup
@@ -21,7 +23,11 @@ from vis import (
     visualize_bayesian_delta_results,
 )
 
-from collections import OrderedDict
+
+# Until streamlit supports Bokeh 3,
+# we must always use matplotlib backend for plots.
+# This overloads the setting spearmint.cfg::vis:vis_backend
+hv.extension("matplotlib")
 
 
 def reload_page():
