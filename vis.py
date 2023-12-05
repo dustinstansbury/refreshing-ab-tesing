@@ -132,8 +132,6 @@ def plot_binary_samples_bars(control_samples, variation_samples):
 
     df = pd.concat(dfs, axis=0).reset_index(drop=True)
 
-    logging.warning(df)
-
     layout = df.hvplot.bar(
         x="treatment",
         y="proportion",
