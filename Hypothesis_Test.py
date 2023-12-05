@@ -5,6 +5,7 @@ import pandas as pd
 
 import streamlit as st
 import holoviews as hv
+from holoviews.plotting.mpl import MPLPlot
 
 from collections import OrderedDict
 
@@ -27,7 +28,9 @@ from vis import (
 # we use matplotlib backend for plots.
 # This overloads the setting spearmint.cfg::vis:vis_backend
 warnings.filterwarnings("ignore", module="holoviews")
+MPLPlot.sublabel_format = ""
 hv.extension("matplotlib")
+
 
 MAX_BOOTSTRAP_NOBS = 10_000
 MAX_MCMC_NOBS = 5_000
