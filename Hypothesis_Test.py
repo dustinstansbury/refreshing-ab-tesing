@@ -11,7 +11,7 @@ from collections import OrderedDict
 from spearmint.experiment import Experiment
 from spearmint.hypothesis_test import HypothesisTest, HypothesisTestGroup
 from spearmint.stats import Samples
-from spearmint.utils import infer_variable_type
+from spearmint.utils import infer_variable_type, format_value
 
 from vis import (
     plot_samples,
@@ -28,6 +28,8 @@ from vis import (
 # This overloads the setting spearmint.cfg::vis:vis_backend
 warnings.filterwarnings("ignore", module="holoviews")
 hv.extension("matplotlib")
+
+MAX_BOOTSTRAP_NOBS = 10_0000
 
 
 def reload_page():
@@ -61,6 +63,39 @@ def load_dataset(dataset_file):
         st.session_state["dataframe"] = dataframe
         st.session_state["data_columns"] = dataframe.columns.tolist()
         st.session_state["available_data_columns"] = dataframe.columns.tolist()
+
+
+def summarize_samples(samples):
+    def _make_df(samples, is_control):
+        name = samples.name
+        if is_control:
+            name += " (control)"
+        return pd.DataFrame(
+            (
+                samples.nobs,
+                format_value(samples.mean, precision=4),
+                format_value(samples.confidence_interval(0.95), precision=3),
+                format_value(samples.var, precision=4),
+            ),
+            index=[
+                "# Observations",
+                "mean",
+                "95% CI",
+                "variance",
+            ],
+            columns=[name],
+        ).T
+
+    if isinstance(samples, list):
+        dfs = []
+        for ii, samp in enumerate(samples):
+            dfs.append(_make_df(samp, ii == 0))
+
+        df = pd.concat(dfs, axis=0)
+    else:
+        df = _make_df(samples)
+
+    st.dataframe(df, use_container_width=True)
 
 
 def plot_results():
@@ -191,9 +226,8 @@ st.markdown(
 
 _Powered by [spearmint](https://github.com/dustinstansbury/spearmint)_
 
-Use this simple app to run AB tests against their own datasets. The app
-supports inference using many different methods and many variable types are
-supported.
+Use this simple app to run AB tests using your own datasets. The app
+supports many different inference methods and variable types.
 
 To run a test, you'll need to:
 
@@ -239,7 +273,13 @@ if st.session_state.get("dataframe") is not None:
         if st.session_state.get("metric_column") is not None:
             # Filter out any invalid metric rows
             valid_metric_mask = st.session_state["data"][metric_column].notnull()
-            st.session_state["data"] = st.session_state["data"][valid_metric_mask]
+            n_invalid_metric = (~valid_metric_mask).sum()
+            if n_invalid_metric > 0:
+                st.session_state["data"] = st.session_state["data"][valid_metric_mask]
+                st.warning(
+                    f"Removing {n_invalid_metric:,} "
+                    f"observations due to invalid values in `{metric_column}` column"
+                )
 
             inferred_variable_type = infer_variable_type(
                 st.session_state["data"][metric_column]
@@ -279,7 +319,16 @@ variable type.
         if treatment_column is not None:
             # Filter out any invalid treatment rows
             valid_treatment_mask = st.session_state["data"][treatment_column].notnull()
-            st.session_state["data"] = st.session_state["data"][valid_treatment_mask]
+
+            n_invalid_treatments = (~valid_treatment_mask).sum()
+            if n_invalid_treatments > 0:
+                st.session_state["data"] = st.session_state["data"][
+                    valid_treatment_mask
+                ]
+                st.warning(
+                    f"Removing {n_invalid_treatments:,} "
+                    f"observations due to invalid values in `{treatment_column}` column"
+                )
 
             if pd.api.types.is_numeric_dtype(
                 st.session_state["data"][treatment_column].dtype
@@ -348,6 +397,9 @@ variable type.
                     )
                 )
 
+            """### Data Summary"""
+            summarize_samples([control_samples] + variation_samples)
+
             st.write(plot_samples(control_samples, variation_samples, variable_type))
 
     # -------- Hypothesis Specification -----------
@@ -394,7 +446,25 @@ variable type.
 
     icol, ocol = st.columns(2)
 
-    INFERENCE_METHODS = ("frequentist", "bootstrap", "bayesian")
+    INFERENCE_METHODS = ["frequentist", "bootstrap", "bayesian"]
+
+    if (st.session_state.get("metric_column") is not None) and (
+        st.session_state.get("treatment_column") is not None
+    ):
+        max_treatment_nobs = (
+            st.session_state["data"]
+            .groupby(st.session_state["treatment_column"])
+            .count()[st.session_state["metric_column"]]
+            .max()
+        )
+
+        if max_treatment_nobs > MAX_BOOTSTRAP_NOBS:
+            st.warning(
+                f"Dataset contains at least {max_treatment_nobs:,} observations "
+                "for one of the treatments. Bootstrap inference is not available "
+                "to ensure computational stability."
+            )
+            INFERENCE_METHODS.remove("bootstrap")
 
     with icol:
         st.session_state["inference_method"] = inference_method = st.selectbox(
