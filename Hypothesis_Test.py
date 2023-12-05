@@ -29,7 +29,8 @@ from vis import (
 warnings.filterwarnings("ignore", module="holoviews")
 hv.extension("matplotlib")
 
-MAX_BOOTSTRAP_NOBS = 10_0000
+MAX_BOOTSTRAP_NOBS = 10_000
+MAX_MCMC_NOBS = 5_000
 
 
 def reload_page():
@@ -442,16 +443,14 @@ variable type.
 
     # -------- Inference Specification -----------
 
-    """## 🛠️ Inference Procedure"""
-
-    icol, ocol = st.columns(2)
-
     INFERENCE_METHODS = ["frequentist", "bootstrap", "bayesian"]
+
+    """## 🛠️ Inference Procedure"""
 
     if (st.session_state.get("metric_column") is not None) and (
         st.session_state.get("treatment_column") is not None
     ):
-        max_treatment_nobs = (
+        st.session_state["max_treatment_nobs"] = max_treatment_nobs = (
             st.session_state["data"]
             .groupby(st.session_state["treatment_column"])
             .count()[st.session_state["metric_column"]]
@@ -460,11 +459,15 @@ variable type.
 
         if max_treatment_nobs > MAX_BOOTSTRAP_NOBS:
             st.warning(
-                f"Dataset contains at least {max_treatment_nobs:,} observations "
-                "for one of the treatments. Bootstrap inference is not available "
-                "to ensure computational stability."
+                "Bootstrap inference is unavailable.\n\n"
+                f"Dataset contains {max_treatment_nobs:,} observations "
+                "for one of the treatments. To ensure computational stability "
+                "on this publicly-shared application, the max number of "
+                f"observations for Bootstrap inference is limited to {MAX_BOOTSTRAP_NOBS:,}. "
             )
             INFERENCE_METHODS.remove("bootstrap")
+
+    icol, ocol = st.columns(2)
 
     with icol:
         st.session_state["inference_method"] = inference_method = st.selectbox(
@@ -536,6 +539,16 @@ variable type.
 
             # parameter estimation method
             parameter_estimation_choices = get_bayesian_parameter_estimation_choices()
+            if st.session_state["max_treatment_nobs"] > MAX_MCMC_NOBS:
+                st.warning(
+                    "MCMC parameter estimation is unavailable.\n\n"
+                    f"Dataset contains {max_treatment_nobs:,} observations "
+                    "for one of the treatments. To ensure computational stability "
+                    "on this publicly-shared application, the max number of "
+                    f"observations for MCMC parameter estimation is limited to {MAX_MCMC_NOBS:,}."
+                )
+
+                parameter_estimation_choices.remove("mcmc")
 
             st.session_state[
                 "bayesian_parameter_estimation_method"
