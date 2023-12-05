@@ -542,7 +542,7 @@ a:hover,  a:active {
     background-color: transparent;
     color: lightgray;
     text-align: right;
-    padding-right: 50px;
+    padding-right: 80px;
 }
 </style>
 <div class="footer">
