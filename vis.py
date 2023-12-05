@@ -1,15 +1,25 @@
-from functools import reduce
+import warnings
+import logging
+
 import numpy as np
+import pandas as pd
 
 import holoviews as hv
+import hvplot.pandas
+
+from functools import reduce
 from holoviews.plotting.mpl import MPLPlot
+
 
 from spearmint import vis
 
+warnings.filterwarnings("ignore", module="holoviews")
 MPLPlot.sublabel_format = ""
 
 
 SHOW_INTERVAL_TEXT = False
+HISTOGRAM_ALPHA = 0.3
+
 
 CONTROL_COLOR = vis.COLORS.gray
 variation_colors = ["blue", "green", "yellow", "purple", "red"]
@@ -20,7 +30,181 @@ def get_variation_color(idx):
     return getattr(vis.COLORS, variation_colors[idx % n_colors])
 
 
-def visualize_means_delta_results(results):
+def rescale_color(hex_color_str: str, scale_factor: float = 1.0):
+    """
+    Rescales a hex color string by `scale_factor`. Returns scaled hex string.
+
+    Parameters
+    ----------
+    hex_color_str : str
+        The original color string in HEX
+    scale_factor : float
+        The color scale factor. To darken the color, use a float value between
+        0 and 1. To brighten the color, use a float value greater than 1.
+
+    >>> rescale_color("#DF3C3C", .5)
+    #6F1E1E
+    >>> rescale_color("#52D24F", 1.6)
+    #83FF7E
+    >>> rescale_color("#4F75D2", 1)
+    #4F75D2
+    """
+
+    def _clamp(val, minimum=0, maximum=255):
+        if val < minimum:
+            return minimum
+        if val > maximum:
+            return maximum
+        return int(val)
+
+    hex_color_str = hex_color_str.strip("#")
+
+    if scale_factor < 0 or len(hex_color_str) != 6:
+        return hex_color_str
+
+    r, g, b = (
+        int(hex_color_str[:2], 16),
+        int(hex_color_str[2:4], 16),
+        int(hex_color_str[4:], 16),
+    )
+
+    r = _clamp(r * scale_factor)
+    g = _clamp(g * scale_factor)
+    b = _clamp(b * scale_factor)
+
+    return "#%02x%02x%02x" % (r, g, b)
+
+
+def plot_samples_kde(control_samples, variation_samples, variable_type):
+    if variable_type == "binary":
+        layout = vis.plot_bernoulli(
+            p=control_samples.mean,
+            label=f"{control_samples.name} (control)",
+            color=CONTROL_COLOR,
+        )
+        for ii, vs in enumerate(variation_samples):
+            layout *= vis.plot_bernoulli(
+                p=vs.mean,
+                label=vs.name,
+                color=get_variation_color(ii),
+            )
+    else:
+        layout = vis.plot_kde(
+            samples=control_samples.data,
+            label=f"{control_samples.name} (control)",
+            color=CONTROL_COLOR,
+        )
+        for ii, vs in enumerate(variation_samples):
+            layout *= vis.plot_kde(
+                samples=vs.data,
+                # std=vs.std,
+                label=vs.name,
+                color=get_variation_color(ii),
+            )
+    return layout
+
+
+def plot_binary_samples_bars(control_samples, variation_samples):
+    def _make_dataframe(samples, is_control: bool = False):
+        unique_values = np.unique(samples.data).astype(int)
+        name = samples.name
+        if is_control:
+            name += " (control)"
+        nobs = samples.nobs
+        treatments = []
+        values = []
+        proportions = []
+        for uv in unique_values:
+            n_values = (samples.data == uv).sum()
+            treatments.append(name)
+            values.append(uv)
+            proportions.append(n_values / nobs)
+
+        return pd.DataFrame(
+            {"treatment": treatments, "value": values, "proportion": proportions}
+        )
+
+    dfs = [_make_dataframe(control_samples, is_control=True)]
+    colors = [CONTROL_COLOR]
+    for ii, vs in enumerate(variation_samples):
+        dfs.append(_make_dataframe(vs))
+        colors.append(get_variation_color(ii))
+
+    df = pd.concat(dfs, axis=0).reset_index(drop=True)
+
+    logging.warning(df)
+
+    layout = df.hvplot.bar(
+        x="treatment",
+        y="proportion",
+        by="value",
+        # color="color",
+        # stacked=True,
+    ).opts(multi_level=True, invert_axes=True, color=colors, alpha=0.75)
+    return layout
+
+
+def plot_samples_histogram(control_samples, variation_samples, variable_type):
+    max_vals = [control_samples.data.max()] + [
+        vs.data.max() for vs in variation_samples
+    ]
+    max_val = np.max(max_vals)
+
+    min_vals = [control_samples.data.min()] + [
+        vs.data.min() for vs in variation_samples
+    ]
+    min_val = np.min(min_vals)
+
+    if variable_type == "binary":
+        # bins = np.linspace(0, 1, 20)
+        return plot_binary_samples_bars(control_samples, variation_samples)
+
+    elif variable_type == "counts":
+        bins = np.arange(0, max_val + 1)
+    else:
+        bins = np.linspace(min_val, max_val, 20)
+
+    layout = vis.plot_histogram(
+        samples=control_samples,
+        label=f"{control_samples.name} (control)",
+        color=CONTROL_COLOR,
+        bins=bins,
+        alpha=HISTOGRAM_ALPHA,
+    )
+    for ii, vs in enumerate(variation_samples):
+        layout *= vis.plot_histogram(
+            samples=vs,
+            label=vs.name,
+            color=get_variation_color(ii),
+            bins=bins,
+            alpha=HISTOGRAM_ALPHA,
+        )
+    return layout
+
+
+def plot_samples(control_samples, variation_samples, variable_type):
+    nobs = [control_samples.nobs] + [vs.nobs for vs in variation_samples]
+    if np.max(nobs) > 500 and variable_type == "continuous":
+        try:
+            layout = plot_samples_kde(control_samples, variation_samples, variable_type)
+        except Exception as e:
+            logging.warning(
+                f"Could not plot kde, falling back to histogram. Exception: `{e}`"
+            )
+            layout = plot_samples_histogram(
+                control_samples, variation_samples, variable_type
+            )
+    else:
+        layout = plot_samples_histogram(
+            control_samples, variation_samples, variable_type
+        )
+
+    layout = layout.relabel("Dataset Samples").opts(legend_position="right")
+
+    return hv.render(layout)
+
+
+def plot_frequentist_continuous_results(results):
     distribution_plots = []
     # Sample distributinos
     distribution_plots.append(
@@ -121,7 +305,7 @@ def visualize_means_delta_results(results):
     return visualization
 
 
-def visualize_proportions_delta_results(results):
+def plot_frequentist_binary_results(results):
     # Sample distribution comparison plot
     def get_binomial_cis(samples, alpha):
         """Convert proportionality to successful # trials"""
@@ -228,7 +412,7 @@ def visualize_proportions_delta_results(results):
     return visualization
 
 
-def visualize_rates_ratio_results(results):
+def plot_frequentist_counts_resuls(results):
     distribution_plots = []
     distribution_plots.append(
         vis.plot_poisson(
@@ -325,7 +509,7 @@ def visualize_rates_ratio_results(results):
     return visualization
 
 
-def visualize_bootstrap_delta_results(results):
+def plot_bootstrap_results(results):
     test_statistic_label = results[0].test_statistic_name.replace("_", " ")
     test_statistic_title = test_statistic_label.title()
 
@@ -423,7 +607,7 @@ def visualize_bootstrap_delta_results(results):
     return visualization
 
 
-def visualize_bayesian_delta_results(
+def plot_bayesian_results(
     results,
     include_prior: bool = False,
 ):
