@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 import scipy as sp
 import pandas as pd
@@ -10,23 +11,22 @@ from collections import OrderedDict
 from spearmint.experiment import Experiment
 from spearmint.hypothesis_test import HypothesisTest, HypothesisTestGroup
 from spearmint.stats import Samples
-from spearmint import vis
 from spearmint.utils import infer_variable_type
 
 from vis import (
-    CONTROL_COLOR,
-    get_variation_color,
-    visualize_means_delta_results,
-    visualize_proportions_delta_results,
-    visualize_rates_ratio_results,
-    visualize_bootstrap_delta_results,
-    visualize_bayesian_delta_results,
+    plot_samples,
+    plot_frequentist_continuous_results,
+    plot_frequentist_binary_results,
+    plot_frequentist_counts_resuls,
+    plot_bootstrap_results,
+    plot_bayesian_results,
 )
 
 
 # Until streamlit supports Bokeh 3,
-# we must always use matplotlib backend for plots.
+# we use matplotlib backend for plots.
 # This overloads the setting spearmint.cfg::vis:vis_backend
+warnings.filterwarnings("ignore", module="holoviews")
 hv.extension("matplotlib")
 
 
@@ -63,50 +63,20 @@ def load_dataset(dataset_file):
         st.session_state["available_data_columns"] = dataframe.columns.tolist()
 
 
-def plot_samples(control_samples, variation_samples, variable_type):
-    if variable_type == "binary":
-        layout = vis.plot_bernoulli(
-            p=control_samples.mean,
-            label=f"{control_samples.name} (control)",
-            color=CONTROL_COLOR,
-        )
-        for ii, vs in enumerate(variation_samples):
-            layout *= vis.plot_bernoulli(
-                p=vs.mean,
-                label=vs.name,
-                color=get_variation_color(ii),
-            )
-    else:
-        layout = vis.plot_kde(
-            samples=control_samples.data,
-            label=f"{control_samples.name} (control)",
-            color=CONTROL_COLOR,
-        )
-        for ii, vs in enumerate(variation_samples):
-            layout *= vis.plot_kde(
-                samples=vs.data,
-                # std=vs.std,
-                label=vs.name,
-                color=get_variation_color(ii),
-            )
-
-    return layout.relabel("Dataset Samples (KDE)").opts(legend_position="right")
-
-
 def plot_results():
     if st.session_state["inference_method"] == "frequentist":
         if st.session_state["variable_type"] == "binary":
-            layout = visualize_proportions_delta_results(
+            layout = plot_frequentist_binary_results(st.session_state["test_results"])
+        elif st.session_state["variable_type"] == "continuous":
+            layout = plot_frequentist_continuous_results(
                 st.session_state["test_results"]
             )
-        elif st.session_state["variable_type"] == "continuous":
-            layout = visualize_means_delta_results(st.session_state["test_results"])
         elif st.session_state["variable_type"] == "counts":
-            layout = visualize_rates_ratio_results(st.session_state["test_results"])
+            layout = plot_frequentist_counts_resuls(st.session_state["test_results"])
     elif st.session_state["inference_method"] == "bootstrap":
-        layout = visualize_bootstrap_delta_results(st.session_state["test_results"])
+        layout = plot_bootstrap_results(st.session_state["test_results"])
     elif st.session_state["inference_method"] == "bayesian":
-        layout = visualize_bayesian_delta_results(st.session_state["test_results"])
+        layout = plot_bayesian_results(st.session_state["test_results"])
 
     return st.write(hv.render(layout))
 
@@ -123,6 +93,12 @@ def get_mc_correction():
         index=MULTIPLE_COMPARISON_METHODS.index(
             st.session_state.get("mc_correction_method", "sidak")
         ),
+        help="""When using Frequentist or Bootstrap inference for multiple
+        variation groups, one must perform [Multiple Comparison correction](https://en.wikipedia.org/wiki/Multiple_comparisons_problem) to
+        avoid inflated Type I error rate. Select your correction method here. If
+        you're unsure about which correction method to use, you can always stick with
+        the default method 😉.
+        """,
     )
     st.session_state["mc_correction_method"] = mc_correction_method
     return mc_correction_method
@@ -154,7 +130,12 @@ def run_inference():
     alpha = st.session_state["alpha"]
     variation_groups = st.session_state["variation_groups"]
     n_tests = len(variation_groups)
-    experiment = Experiment(st.session_state.data)
+
+    experiment = Experiment(
+        st.session_state["data"],
+        measures=[st.session_state["metric_column"]],
+        treatment=st.session_state["treatment_column"],
+    )
     tests = []
     test_results = []
     for ii, vg in enumerate(variation_groups):
@@ -204,21 +185,34 @@ reload_page()
 
 # -------- Dataset Specification -----------
 
-"""# ✨ Refreshing Hypothesis Testing ✨
+st.markdown(
+    """
+# Easy AB Testing
 
-To use this app
+_Powered by [spearmint](https://github.com/dustinstansbury/spearmint)_
 
-1. 📁 **Import a Dataset** csv file
-2. 🔍 **Specify the data columns** that define the **metric** and **treatment groups**
-3. 💡**Specify your Hypothesis**, including comparison type and acceptable alpha
-4. 🛠️ **Configure the Inference Procedure**. You can use **frequentist**, **bootstrap**, or **Bayesian** inference methods.
+Use this simple app to run AB tests against their own datasets. The app
+supports inference using many different methods and many variable types are
+supported.
+
+To run a test, you'll need to:
+
+1. 📁 **Import a Dataset** csv file from you computer.
+2. 🔍 **Specify the data columns** that define the **metric** and **treatment groups** in your study.
+3. 💡**Specify your Hypothesis**, including comparison type and acceptable alpha. Or, just use the defaults.
+4. 🛠️ **Configure the Inference Procedure**. You can use **frequentist**, **bootstrap**, or **Bayesian** inference methods. Or, just use the defaults.
 5. ⚡️ **Run the Analysis** and interpret the results
 """
+)
 
 """## 📁 Dataset"""
 dataset_file = st.file_uploader(
     label="Choose a dataset file to import",
     type=["csv", "tsv"],
+    help="Select a dataset file. The dataset must contain at least two columns, "
+    "with one of the columns defining the values of a `metric` used for comparison. "
+    "The other column should define a set of discrete values used for defining "
+    "the control and variation `treatment`s.",
 )
 
 load_dataset(dataset_file)
@@ -236,6 +230,9 @@ if st.session_state.get("dataframe") is not None:
                 "Metric Column",
                 [st.session_state.get("metric_column", None)]
                 + st.session_state["available_data_columns"],
+                help="Select the column in your dataset that "
+                "defines the target metric that you'd like "
+                "to compare across treatment groups.",
             )
 
         inferred_variable_type = "continuous"
@@ -253,6 +250,18 @@ if st.session_state.get("dataframe") is not None:
                 "Metric Variable Type",
                 VARIABLE_TYPES,
                 index=VARIABLE_TYPES.index(inferred_variable_type),
+                help="""Select the variable type of your data.
+
+For conversion metrics,
+encoded as True/False or 0/1 (e.g. conversion on a CTA), use the
+`binary` metric type. For event count metrics (e.g. # of clicks in a session),
+use the `counts` variable. For continuous variables (e.g. session length
+in seconds or proportion of time spent on a page) use the `continuous`
+variable type.
+
+> ⚠️ Note that the app will try to infer the variable type from the values in the
+`Metric Column`. This option can be used to override that that inferred variable type
+                """,
             )
             st.session_state["variable_type"] = variable_type
 
@@ -262,12 +271,22 @@ if st.session_state.get("dataframe") is not None:
                 "Treatment Column",
                 [st.session_state.get("treatment_column", None)]
                 + st.session_state["available_data_columns"],
+                help="Select the column in your dataset that "
+                "defines the individual treatment groups to compare. "
+                "Note that this column should contain discrete values.",
             )
 
         if treatment_column is not None:
             # Filter out any invalid treatment rows
             valid_treatment_mask = st.session_state["data"][treatment_column].notnull()
             st.session_state["data"] = st.session_state["data"][valid_treatment_mask]
+
+            if pd.api.types.is_numeric_dtype(
+                st.session_state["data"][treatment_column].dtype
+            ):
+                st.session_state["data"][treatment_column] = st.session_state["data"][
+                    treatment_column
+                ].apply(lambda x: f"{x}")
 
             ccol, vcol = st.columns(2)
 
@@ -283,6 +302,8 @@ if st.session_state.get("dataframe") is not None:
                     index=get_list_index(
                         treatment_columns, st.session_state.get("control_group")
                     ),
+                    help="Select the value in `Treatment Column` that specifies "
+                    "the control group for the experiment.",
                 )
 
             available_variation_groups = [
@@ -305,6 +326,8 @@ if st.session_state.get("dataframe") is not None:
                     "Variation Treatment(s)",
                     available_variation_groups,
                     default=default_variation_groups,
+                    help="Select one or more values in `Treatment Column` that specify "
+                    "the variation groups to compare to the control group.",
                 )
             st.session_state["n_variations"] = len(variation_groups)
 
@@ -325,11 +348,7 @@ if st.session_state.get("dataframe") is not None:
                     )
                 )
 
-            st.write(
-                hv.render(
-                    plot_samples(control_samples, variation_samples, variable_type)
-                )
-            )
+            st.write(plot_samples(control_samples, variation_samples, variable_type))
 
     # -------- Hypothesis Specification -----------
 
@@ -346,18 +365,27 @@ if st.session_state.get("dataframe") is not None:
 
     with hcol1:
         st.session_state["hypothesis"] = HYPOTHESIS_OPTIONS[
-            st.selectbox(label="Hypothesis", options=HYPOTHESIS_OPTIONS.keys())
+            st.selectbox(
+                label="Comparison Type",
+                options=HYPOTHESIS_OPTIONS.keys(),
+                help="Select the relevant hypothesis comparison type "
+                "for your experiment",
+            )
         ]
 
     with hcol2:
         st.session_state["alpha"] = st.slider(
-            "alpha (Acceptable False Positive Rate)",
+            "alpha",
             min_value=0.01,
             max_value=0.5,
             step=0.001,
             value=0.05,
             format="%1.3f",
             label_visibility="visible",
+            help="Set [the acceptable False positive rate](https://en.wikipedia.org/wiki/Type_I_and_type_II_errors) for your Hypothesis "
+            "test. For example, alpha=0.05 means that we're willing to accept a "
+            "false positive (i.e. we detect a difference between the variation "
+            " and control when there isn't one) in one out of twenty experiments.",
         )
 
     # -------- Inference Specification -----------
@@ -376,6 +404,16 @@ if st.session_state.get("dataframe") is not None:
             index=INFERENCE_METHODS.index(
                 st.session_state.get("inference_method", "frequentist")
             ),
+            help="""Select the inference method used for the Hypothesis test.
+            Different inference methods have varying trade-offs in terms
+            of interpretation, numerical efficiency, etc. Furthermore,
+            different methods will have different options that will pop up on
+            the right of this dropdown. For details, see the docs on [Frequentist Inference](https://en.wikipedia.org/wiki/Frequentist_inference),
+            [Bootstrap Inference](https://en.wikipedia.org/wiki/Bootstrapping_\(statistics\)), and
+            [Bayesian Inference](https://en.wikipedia.org/wiki/Bayesian_inference).
+            If you're unsure about the inference method to use, or how to set 
+            its options, you can always just stick
+            with the default method 😉.""",
         )
 
     n_variations = st.session_state.get("n_variations", 1)
@@ -398,11 +436,14 @@ if st.session_state.get("dataframe") is not None:
                 return func
 
             statistic_function_text = st.text_input(
-                """Define a custom statistic function for the bootstrap.
-                You can use numpy (np) or scipy (sp) functions in the
-                definition
-                """,
+                label="Statistic Function",
                 value="""np.mean""",
+                help="""Define a custom statistic function for the bootstrap.
+                You can use numpy (np) or scipy (sp) functions in the
+                definition. The function must return a scalar statistic value when
+                given an array of numbers. For example `lambda x: sp.linalg.norm(np.abs(x))`
+                would be a valid statistic function.
+                """,
             )
             statistic_function = compile_statistic_function(statistic_function_text)
             inference_params["statistic_function"] = statistic_function
@@ -417,6 +458,9 @@ if st.session_state.get("dataframe") is not None:
                 "Bayesian Model",
                 model_choices,
                 index=0,
+                help="""Select the model form used for Bayesian inference. If you're 
+                unsure about which model to use, or how to configure, feel free to 
+                use the default model name 😉.""",
             )
             inference_params["bayesian_model_name"] = bayesian_model_name
 
@@ -429,6 +473,9 @@ if st.session_state.get("dataframe") is not None:
                 "Parameter Estimation Method",
                 parameter_estimation_choices,
                 index=0,
+                help="Select the parameter estimation method for Bayesian inference. "
+                "If you're unsure about which estimation method to use, feel free to "
+                "use the defaults, which should generally provide good results 🤓.",
             )
             inference_params[
                 "bayesian_parameter_estimation_method"
@@ -439,7 +486,11 @@ if st.session_state.get("dataframe") is not None:
 
     """## ⚡️ Analysis"""
 
-    run_analysis = st.button(label="Run Analysis")
+    run_analysis = st.button(
+        label="Run Analysis",
+        help="Run the inference procedure on your dataset. This will generate "
+        "a results report below.",
+    )
     if run_analysis:
         run_inference()
 
@@ -450,9 +501,13 @@ if st.session_state.get("dataframe") is not None:
 
         with rcol1:
             """#### Test Summary"""
-            st.dataframe(
-                st.session_state["test_results_df"][["hypothesis", "accept_hypothesis"]]
+            summary = st.session_state["test_results_df"][
+                ["hypothesis", "accept_hypothesis"]
+            ]
+            summary.loc[:, "accept_hypothesis"] = summary["accept_hypothesis"].apply(
+                lambda x: "✅" if x else "❌"
             )
+            st.dataframe(summary)
 
         with rcol2:
             """#### Details"""
@@ -463,8 +518,12 @@ else:
     st.write("No dataset specified, please load one from a file.")
 
 
-# floating footer
-footer = """<style>
+footer = """
+
+---
+##### Please report any bugs or issues to the [Issue Tracker](https://github.com/dustinstansbury/refreshing-ab-testing/issues)
+
+<style>
 a:link , a:visited{
     color: #13A085;
     background-color: transparent;
@@ -483,6 +542,7 @@ a:hover,  a:active {
     background-color: transparent;
     color: lightgray;
     text-align: right;
+    padding-right: 50px;
 }
 </style>
 <div class="footer">
