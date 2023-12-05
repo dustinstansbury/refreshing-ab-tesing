@@ -22,7 +22,16 @@ HISTOGRAM_ALPHA = 0.3
 
 
 CONTROL_COLOR = vis.COLORS.gray
-variation_colors = ["blue", "green", "yellow", "purple", "red"]
+variation_colors = [
+    "blue",
+    "green",
+    "red",
+    "yellow",
+    "purple",
+    "light_blue",
+    "light_green",
+    "salmon",
+]
 n_colors = len(variation_colors)
 
 
