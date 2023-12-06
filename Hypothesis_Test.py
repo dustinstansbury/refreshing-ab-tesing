@@ -99,7 +99,8 @@ def summarize_samples(samples):
     else:
         df = _make_df(samples)
 
-    st.dataframe(df, use_container_width=True)
+    use_container_width = st.checkbox("Expand Table")
+    st.dataframe(df, use_container_width=use_container_width)
 
 
 def plot_results():
@@ -411,7 +412,7 @@ variable type.
                     )
                 )
 
-            sumcol, plotcol = st.columns(2)
+            sumcol, plotcol = st.columns([0.4, 0.6])
             with sumcol:
                 """### Data Summary"""
                 summarize_samples([control_samples] + variation_samples)
