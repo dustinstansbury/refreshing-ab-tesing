@@ -34,6 +34,7 @@ hv.extension("matplotlib")
 
 MAX_BOOTSTRAP_NOBS = 10_000
 MAX_MCMC_NOBS = 5_000
+MAX_N_VARIATIONS = 20
 
 
 def reload_page():
@@ -69,7 +70,7 @@ def load_dataset(dataset_file):
         st.session_state["available_data_columns"] = dataframe.columns.tolist()
 
 
-def summarize_samples(samples):
+def summarize_samples(samples, use_container_width):
     def _make_df(samples, is_control):
         name = samples.name
         if is_control:
@@ -99,7 +100,6 @@ def summarize_samples(samples):
     else:
         df = _make_df(samples)
 
-    use_container_width = st.checkbox("Expand Table")
     st.dataframe(df, use_container_width=use_container_width)
 
 
@@ -393,34 +393,54 @@ variable type.
                     help="Select one or more values in `Treatment Column` that specify "
                     "the variation groups to compare to the control group.",
                 )
-            st.session_state["n_variations"] = len(variation_groups)
+            st.session_state["n_variations"] = n_variations = len(variation_groups)
 
-            control_samples = get_samples(
-                st.session_state.data,
-                st.session_state.metric_column,
-                st.session_state.treatment_column,
-                st.session_state.control_group,
-            )
-            variation_samples = []
-            for treatment_name in st.session_state["variation_groups"]:
-                variation_samples.append(
-                    get_samples(
-                        st.session_state.data,
-                        st.session_state.metric_column,
-                        st.session_state.treatment_column,
-                        treatment_name,
+            if n_variations > MAX_N_VARIATIONS:
+                st.warning(
+                    "Too variations specified\n\n"
+                    f"{n_variations} variations specified. To ensure numerical "
+                    f"stability on this publicly-shared app, a max of {MAX_N_VARIATIONS} "
+                    "variations are allowed. Please check that you've selected the"
+                    "correct `Treatment Column`, or reduce the number of variations."
+                )
+            else:
+                control_samples = get_samples(
+                    st.session_state.data,
+                    st.session_state.metric_column,
+                    st.session_state.treatment_column,
+                    st.session_state.control_group,
+                )
+                variation_samples = []
+                for treatment_name in st.session_state["variation_groups"]:
+                    variation_samples.append(
+                        get_samples(
+                            st.session_state.data,
+                            st.session_state.metric_column,
+                            st.session_state.treatment_column,
+                            treatment_name,
+                        )
                     )
-                )
 
-            sumcol, plotcol = st.columns([0.4, 0.6])
-            with sumcol:
                 """### Data Summary"""
-                summarize_samples([control_samples] + variation_samples)
+                sbcol, spcol, _ = st.columns([0.1, 0.1, 0.8])  # Better way to do this?
+                with sbcol:
+                    use_container_width = st.checkbox("Expand Table")
+                with spcol:
+                    _plot_samples = st.checkbox("Plot Samples")
+                sumcol, plotcol = st.columns(2)
+                with sumcol:
+                    summarize_samples(
+                        [control_samples] + variation_samples,
+                        use_container_width=use_container_width,
+                    )
 
-            with plotcol:
-                st.write(
-                    plot_samples(control_samples, variation_samples, variable_type)
-                )
+                with plotcol:
+                    if _plot_samples:
+                        st.write(
+                            plot_samples(
+                                control_samples, variation_samples, variable_type
+                            )
+                        )
 
     # -------- Hypothesis Specification -----------
 
@@ -480,7 +500,7 @@ variable type.
             st.warning(
                 "Bootstrap inference is unavailable.\n\n"
                 f"Dataset contains {max_treatment_nobs:,} observations "
-                "for one of the treatments. To ensure computational stability "
+                "for one of the treatments. To ensure numerical stability "
                 "on this publicly-shared application, the max number of "
                 f"observations for Bootstrap inference is limited to {MAX_BOOTSTRAP_NOBS:,}. "
             )
@@ -562,7 +582,7 @@ variable type.
                 st.warning(
                     "MCMC parameter estimation is unavailable.\n\n"
                     f"Dataset contains {max_treatment_nobs:,} observations "
-                    "for one of the treatments. To ensure computational stability "
+                    "for one of the treatments. To ensure numerical stability "
                     "on this publicly-shared application, the max number of "
                     f"observations for MCMC parameter estimation is limited to {MAX_MCMC_NOBS:,}."
                 )
