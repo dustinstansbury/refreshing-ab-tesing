@@ -232,7 +232,14 @@ _Powered by [spearmint](https://github.com/dustinstansbury/spearmint)_
 
 Use this simple app to run AB tests using your own datasets. The app
 supports many different inference methods and variable types.
+"""
+)
 
+show_instructions = st.checkbox("**Show/Hide Instructions**")
+
+if show_instructions:
+    st.markdown(
+        """
 To run a test, you'll need to:
 
 1. 📁 **Import a Dataset** csv file from you computer.
@@ -241,7 +248,7 @@ To run a test, you'll need to:
 4. 🛠️ **Configure the Inference Procedure**. You can use **frequentist**, **bootstrap**, or **Bayesian** inference methods. Or, just use the defaults.
 5. ⚡️ **Run the Analysis** and interpret the results
 """
-)
+    )
 
 """## 📁 Dataset"""
 dataset_file = st.file_uploader(
