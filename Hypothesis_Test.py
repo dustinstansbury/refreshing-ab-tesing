@@ -155,13 +155,13 @@ def get_bayesian_model_choices():
 
 def get_bayesian_parameter_estimation_choices():
     if st.session_state["bayesian_model_name"] == "bernoulli":
-        return ["analytic", "mcmc", "advi"]
+        return ["analytic", "mcmc"]
     elif st.session_state["bayesian_model_name"] == "binomial":
         return ["analytic", "mcmc"]
     elif st.session_state["bayesian_model_name"] == "gaussian":
-        return ["analytic", "mcmc", "advi"]
+        return ["analytic", "mcmc"]
     elif st.session_state["bayesian_model_name"] == "student_t":
-        return ["mcmc", "advi"]
+        return ["mcmc"]
     elif st.session_state["bayesian_model_name"] == "poisson":
         return ["analytic", "mcmc"]
 
