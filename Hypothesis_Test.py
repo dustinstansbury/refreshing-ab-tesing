@@ -250,15 +250,18 @@ To run a test, you'll need to:
 """
     )
 
-"""## 📁 Dataset"""
-dataset_file = st.file_uploader(
-    label="Choose a dataset file to import",
-    type=["csv", "tsv"],
-    help="Select a dataset file. The dataset must contain at least two columns, "
-    "with one of the columns defining the values of a `metric` used for comparison. "
-    "The other column should define a set of discrete values used for defining "
-    "the control and variation `treatment`s.",
-)
+lcol, _, _ = st.columns(3)
+
+with lcol:
+    """## 📁 Dataset"""
+    dataset_file = st.file_uploader(
+        label="Choose a dataset file to import",
+        type=["csv", "tsv"],
+        help="Select a dataset file. The dataset must contain at least two columns, "
+        "with one of the columns defining the values of a `metric` used for comparison. "
+        "The other column should define a set of discrete values used for defining "
+        "the control and variation `treatment`s.",
+    )
 
 load_dataset(dataset_file)
 
