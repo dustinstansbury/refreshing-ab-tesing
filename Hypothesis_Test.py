@@ -411,10 +411,15 @@ variable type.
                     )
                 )
 
-            """### Data Summary"""
-            summarize_samples([control_samples] + variation_samples)
+            sumcol, plotcol = st.columns(2)
+            with sumcol:
+                """### Data Summary"""
+                summarize_samples([control_samples] + variation_samples)
 
-            st.write(plot_samples(control_samples, variation_samples, variable_type))
+            with plotcol:
+                st.write(
+                    plot_samples(control_samples, variation_samples, variable_type)
+                )
 
     # -------- Hypothesis Specification -----------
 
