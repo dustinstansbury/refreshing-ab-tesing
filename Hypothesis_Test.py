@@ -267,7 +267,8 @@ with lcol:
 load_dataset(dataset_file)
 
 if st.session_state.get("dataframe") is not None:
-    st.dataframe(st.session_state.dataframe)
+    expand_dataset_df = st.checkbox("Expand Data Table")
+    st.dataframe(st.session_state.dataframe, use_container_width=expand_dataset_df)
     st.session_state["data"] = st.session_state["dataframe"].copy()
 
     if st.session_state.get("available_data_columns") is not None:
@@ -422,9 +423,9 @@ variable type.
                     )
 
                 """### Data Summary"""
-                sbcol, spcol, _ = st.columns([0.1, 0.1, 0.8])  # Better way to do this?
+                sbcol, spcol, _ = st.columns([0.15, 0.1, 0.8])  # Better way to do this?
                 with sbcol:
-                    use_container_width = st.checkbox("Expand Table")
+                    use_container_width = st.checkbox("Expand Summary Table")
                 with spcol:
                     _plot_samples = st.checkbox("Plot Samples")
                 sumcol, plotcol = st.columns(2)

@@ -206,7 +206,7 @@ def plot_samples(control_samples, variation_samples, variable_type):
             control_samples, variation_samples, variable_type
         )
 
-    layout = layout.relabel("Dataset Samples").opts(legend_position="right")
+    layout = layout.relabel("Treatment Samples").opts(legend_position="right")
 
     return hv.render(layout)
 
