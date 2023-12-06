@@ -599,7 +599,7 @@ variable type.
         """#### 📊 Test Results"""
         plot_results()
 
-        rcol1, rcol2 = st.columns([0.3, 0.7])
+        rcol1, rcol2 = st.columns([0.2, 0.8])
 
         with rcol1:
             """#### Test Summary"""
