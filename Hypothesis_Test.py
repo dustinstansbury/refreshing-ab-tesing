@@ -23,6 +23,8 @@ from vis import (
     plot_bayesian_results,
 )
 
+import doc
+
 
 # Until streamlit supports Bokeh 3,
 # we use matplotlib backend for plots.
@@ -133,12 +135,7 @@ def get_mc_correction():
         index=MULTIPLE_COMPARISON_METHODS.index(
             st.session_state.get("mc_correction_method", "sidak")
         ),
-        help="""When using Frequentist or Bootstrap inference for multiple
-        variation groups, one must perform [Multiple Comparison correction](https://en.wikipedia.org/wiki/Multiple_comparisons_problem) to
-        avoid inflated Type I error rate. Select your correction method here. If
-        you're unsure about which correction method to use, you can always stick with
-        the default method 😉.
-        """,
+        help=doc.tooltip.select_mc_correction,
     )
     st.session_state["mc_correction_method"] = mc_correction_method
     return mc_correction_method
@@ -225,31 +222,12 @@ reload_page()
 
 # -------- Dataset Specification -----------
 
-st.markdown(
-    """
-# Easy AB Testing
-
-_Powered by [spearmint](https://github.com/dustinstansbury/spearmint)_
-
-Use this simple app to run AB tests using your own datasets. The app
-supports many different inference methods and variable types.
-"""
-)
+st.markdown(doc.intro)
 
 show_instructions = st.checkbox("**Show/Hide Instructions**")
 
 if show_instructions:
-    st.markdown(
-        """
-To run a test, you'll need to:
-
-1. 📁 **Import a Dataset** csv file from you computer.
-2. 🔍 **Specify the data columns** that define the **metric** and **treatment groups** in your study.
-3. 💡**Specify your Hypothesis**, including comparison type and acceptable alpha. Or, just use the defaults.
-4. 🛠️ **Configure the Inference Procedure**. You can use **frequentist**, **bootstrap**, or **Bayesian** inference methods. Or, just use the defaults.
-5. ⚡️ **Run the Analysis** and interpret the results
-"""
-    )
+    st.markdown(doc.instructions.how_to_run_test)
 
 lcol, _, _ = st.columns(3)
 
@@ -258,10 +236,7 @@ with lcol:
     dataset_file = st.file_uploader(
         label="Choose a dataset file to import",
         type=["csv", "tsv"],
-        help="Select a dataset file. The dataset must contain at least two columns, "
-        "with one of the columns defining the values of a `metric` used for comparison. "
-        "The other column should define a set of discrete values used for defining "
-        "the control and variation `treatment`s.",
+        help=doc.tooltip.file_upload,
     )
 
 load_dataset(dataset_file)
@@ -280,9 +255,7 @@ if st.session_state.get("dataframe") is not None:
                 "Metric Column",
                 [st.session_state.get("metric_column", None)]
                 + st.session_state["available_data_columns"],
-                help="Select the column in your dataset that "
-                "defines the target metric that you'd like "
-                "to compare across treatment groups.",
+                help=doc.tooltip.select_metric_column,
             )
 
         inferred_variable_type = "continuous"
@@ -293,8 +266,9 @@ if st.session_state.get("dataframe") is not None:
             if n_invalid_metric > 0:
                 st.session_state["data"] = st.session_state["data"][valid_metric_mask]
                 st.warning(
-                    f"Removing {n_invalid_metric:,} "
-                    f"observations due to invalid values in `{metric_column}` column"
+                    doc.warnings.removing_invalid_metrics(
+                        n_invalid_metric, metric_column
+                    )
                 )
 
             inferred_variable_type = infer_variable_type(
@@ -306,18 +280,7 @@ if st.session_state.get("dataframe") is not None:
                 "Metric Variable Type",
                 VARIABLE_TYPES,
                 index=VARIABLE_TYPES.index(inferred_variable_type),
-                help="""Select the variable type of your data.
-
-For conversion metrics,
-encoded as True/False or 0/1 (e.g. conversion on a CTA), use the
-`binary` metric type. For event count metrics (e.g. # of clicks in a session),
-use the `counts` variable. For continuous variables (e.g. session length
-in seconds or proportion of time spent on a page) use the `continuous`
-variable type.
-
-> ⚠️ Note that the app will try to infer the variable type from the values in the
-`Metric Column`. This option can be used to override that that inferred variable type
-                """,
+                help=doc.tooltip.select_metric_variable_type,
             )
             st.session_state["variable_type"] = variable_type
 
@@ -327,9 +290,7 @@ variable type.
                 "Treatment Column",
                 [st.session_state.get("treatment_column", None)]
                 + st.session_state["available_data_columns"],
-                help="Select the column in your dataset that "
-                "defines the individual treatment groups to compare. "
-                "Note that this column should contain discrete values.",
+                help=doc.tooltip.select_treatment_column,
             )
 
         if treatment_column is not None:
@@ -342,8 +303,9 @@ variable type.
                     valid_treatment_mask
                 ]
                 st.warning(
-                    f"Removing {n_invalid_treatments:,} "
-                    f"observations due to invalid values in `{treatment_column}` column"
+                    doc.warnings.removing_invalid_treatments(
+                        n_invalid_treatments, treatment_column
+                    )
                 )
 
             if pd.api.types.is_numeric_dtype(
@@ -367,8 +329,7 @@ variable type.
                     index=get_list_index(
                         treatment_columns, st.session_state.get("control_group")
                     ),
-                    help="Select the value in `Treatment Column` that specifies "
-                    "the control group for the experiment.",
+                    help=doc.tooltip.select_control_group,
                 )
 
             available_variation_groups = [
@@ -391,18 +352,13 @@ variable type.
                     "Variation Treatment(s)",
                     available_variation_groups,
                     default=default_variation_groups,
-                    help="Select one or more values in `Treatment Column` that specify "
-                    "the variation groups to compare to the control group.",
+                    help=doc.tooltip.select_variation_groups,
                 )
             st.session_state["n_variations"] = n_variations = len(variation_groups)
 
             if n_variations > MAX_N_VARIATIONS:
                 st.warning(
-                    "Too variations specified\n\n"
-                    f"{n_variations} variations specified. To ensure numerical "
-                    f"stability on this publicly-shared app, a max of {MAX_N_VARIATIONS} "
-                    "variations are allowed. Please check that you've selected the"
-                    "correct `Treatment Column`, or reduce the number of variations."
+                    doc.warnings.too_many_variations(n_variations, MAX_N_VARIATIONS)
                 )
             else:
                 control_samples = get_samples(
@@ -461,8 +417,7 @@ variable type.
             st.selectbox(
                 label="Comparison Type",
                 options=HYPOTHESIS_OPTIONS.keys(),
-                help="Select the relevant hypothesis comparison type "
-                "for your experiment",
+                help=doc.tooltip.select_comparison_type,
             )
         ]
 
@@ -475,10 +430,7 @@ variable type.
             value=0.05,
             format="%1.3f",
             label_visibility="visible",
-            help="Set [the acceptable False positive rate](https://en.wikipedia.org/wiki/Type_I_and_type_II_errors) for your Hypothesis "
-            "test. For example, alpha=0.05 means that we're willing to accept a "
-            "false positive (i.e. we detect a difference between the variation "
-            " and control when there isn't one) in one out of twenty experiments.",
+            help=doc.tooltip.set_alpha,
         )
 
     # -------- Inference Specification -----------
@@ -499,11 +451,9 @@ variable type.
 
         if max_treatment_nobs > MAX_BOOTSTRAP_NOBS:
             st.warning(
-                "Bootstrap inference is unavailable.\n\n"
-                f"Dataset contains {max_treatment_nobs:,} observations "
-                "for one of the treatments. To ensure numerical stability "
-                "on this publicly-shared application, the max number of "
-                f"observations for Bootstrap inference is limited to {MAX_BOOTSTRAP_NOBS:,}. "
+                doc.warnings.too_many_treatment_nobs_for_bootstrap(
+                    max_treatment_nobs, MAX_BOOTSTRAP_NOBS
+                )
             )
             INFERENCE_METHODS.remove("bootstrap")
 
@@ -517,16 +467,7 @@ variable type.
             index=INFERENCE_METHODS.index(
                 st.session_state.get("inference_method", "frequentist")
             ),
-            help="""Select the inference method used for the Hypothesis test.
-            Different inference methods have varying trade-offs in terms
-            of interpretation, numerical efficiency, etc. Furthermore,
-            different methods will have different options that will pop up on
-            the right of this dropdown. For details, see the docs on [Frequentist Inference](https://en.wikipedia.org/wiki/Frequentist_inference),
-            [Bootstrap Inference](https://en.wikipedia.org/wiki/Bootstrapping_\(statistics\)), and
-            [Bayesian Inference](https://en.wikipedia.org/wiki/Bayesian_inference).
-            If you're unsure about the inference method to use, or how to set 
-            its options, you can always just stick
-            with the default method 😉.""",
+            help=doc.tooltip.select_inference_method,
         )
 
     n_variations = st.session_state.get("n_variations", 1)
@@ -551,12 +492,7 @@ variable type.
             statistic_function_text = st.text_input(
                 label="Statistic Function",
                 value="""np.mean""",
-                help="""Define a custom statistic function for the bootstrap.
-                You can use numpy (np) or scipy (sp) functions in the
-                definition. The function must return a scalar statistic value when
-                given an array of numbers. For example `lambda x: sp.linalg.norm(np.abs(x))`
-                would be a valid statistic function.
-                """,
+                help=doc.tooltip.define_statistic_function,
             )
             statistic_function = compile_statistic_function(statistic_function_text)
             inference_params["statistic_function"] = statistic_function
@@ -571,9 +507,7 @@ variable type.
                 "Bayesian Model",
                 model_choices,
                 index=0,
-                help="""Select the model form used for Bayesian inference. If you're 
-                unsure about which model to use, or how to configure, feel free to 
-                use the default model name 😉.""",
+                help=doc.tooltip.select_bayesian_model,
             )
             inference_params["bayesian_model_name"] = bayesian_model_name
 
@@ -581,11 +515,9 @@ variable type.
             parameter_estimation_choices = get_bayesian_parameter_estimation_choices()
             if st.session_state["max_treatment_nobs"] > MAX_MCMC_NOBS:
                 st.warning(
-                    "MCMC parameter estimation is unavailable.\n\n"
-                    f"Dataset contains {max_treatment_nobs:,} observations "
-                    "for one of the treatments. To ensure numerical stability "
-                    "on this publicly-shared application, the max number of "
-                    f"observations for MCMC parameter estimation is limited to {MAX_MCMC_NOBS:,}."
+                    doc.warnings.too_many_nobs_for_mcmc(
+                        max_treatment_nobs, MAX_MCMC_NOBS
+                    )
                 )
 
                 parameter_estimation_choices.remove("mcmc")
@@ -596,9 +528,7 @@ variable type.
                 "Parameter Estimation Method",
                 parameter_estimation_choices,
                 index=0,
-                help="Select the parameter estimation method for Bayesian inference. "
-                "If you're unsure about which estimation method to use, feel free to "
-                "use the defaults, which should generally provide good results 🤓.",
+                help=doc.tooltip.select_bayesian_parameters_estimation_method,
             )
             inference_params[
                 "bayesian_parameter_estimation_method"
@@ -609,21 +539,22 @@ variable type.
 
     """## ⚡️ Analysis"""
 
-    run_analysis = st.button(
-        label="Run Analysis",
-        help="Run the inference procedure on your dataset. This will generate "
-        "a results report below.",
+    run_analysis = st.button(label="Run Analysis", help=doc.tooltip.run_analysis)
+    show_interpretation_instructions = st.checkbox(
+        "Show how to interpret Test Results",
+        value=True,
+        help=doc.tooltip.show_interpretations,
     )
     if run_analysis:
         run_inference()
 
-        """#### 📊 Test Results"""
+        """### 📊 Test Results"""
         plot_results()
 
         rcol1, rcol2 = st.columns([0.2, 0.8])
 
         with rcol1:
-            """#### Test Summary"""
+            """### Test Summary"""
             summary = st.session_state["test_results_df"][
                 ["hypothesis", "accept_hypothesis"]
             ]
@@ -635,6 +566,16 @@ variable type.
         with rcol2:
             """#### Details"""
             st.dataframe(st.session_state["test_results_df"])
+
+        if show_interpretation_instructions:
+            icol, _ = st.columns(2)
+            with icol:
+                st.write(
+                    doc.instructions.get_interpretation(
+                        st.session_state["inference_method"],
+                        st.session_state["variable_type"],
+                    )
+                )
 
 
 else:

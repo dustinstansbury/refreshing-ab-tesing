@@ -218,7 +218,7 @@ def plot_frequentist_continuous_results(results):
         vis.plot_gaussian(
             mean=results[0].control.mean,
             std=results[0].control.std,
-            label=results[0].control.name,
+            label=results[0].control.name + " (control)",
             color=CONTROL_COLOR,
         )
     )
@@ -227,7 +227,7 @@ def plot_frequentist_continuous_results(results):
         vis.plot_interval(
             *results[0].control.confidence_interval(1 - results[0].alpha),
             middle=results[0].control.mean,
-            label=results[0].control.name,
+            label=results[0].control.name + " (control)",
             color=CONTROL_COLOR,
             show_interval_text=SHOW_INTERVAL_TEXT,
         )
