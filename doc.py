@@ -129,6 +129,8 @@ To run a test, you'll need to:
     interpret_bayesian_results_template = """
     ---
     
+    ### Interpreting Bayesian Test Results
+
     ##### Left Plot - Sample Distribution & Central Tendency Estimates
     
     > The plot on the left shows the posterior distribution for the
