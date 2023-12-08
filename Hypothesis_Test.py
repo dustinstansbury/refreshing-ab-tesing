@@ -62,7 +62,8 @@ def get_samples(df, metric_column, treatment_column, variation_name):
 
 def load_dataset(dataset_file):
     if dataset_file is None:
-        dataset_file = st.session_state.get("dataset_file")
+        st.session_state = {}
+        # dataset_file = st.session_state.get("dataset_file")
 
     if dataset_file is not None:
         dataframe = load_csv(dataset_file)
@@ -105,24 +106,6 @@ def summarize_samples(samples, use_container_width):
     st.dataframe(df, use_container_width=use_container_width)
 
 
-def plot_results():
-    if st.session_state["inference_method"] == "frequentist":
-        if st.session_state["variable_type"] == "binary":
-            layout = plot_frequentist_binary_results(st.session_state["test_results"])
-        elif st.session_state["variable_type"] == "continuous":
-            layout = plot_frequentist_continuous_results(
-                st.session_state["test_results"]
-            )
-        elif st.session_state["variable_type"] == "counts":
-            layout = plot_frequentist_counts_resuls(st.session_state["test_results"])
-    elif st.session_state["inference_method"] == "bootstrap":
-        layout = plot_bootstrap_results(st.session_state["test_results"])
-    elif st.session_state["inference_method"] == "bayesian":
-        layout = plot_bayesian_results(st.session_state["test_results"])
-
-    return st.write(hv.render(layout))
-
-
 def get_mc_correction():
     MULTIPLE_COMPARISON_METHODS = (
         "sidak",
@@ -145,7 +128,7 @@ def get_bayesian_model_choices():
     if st.session_state["variable_type"] == "counts":
         return ["poisson"]
     elif st.session_state["variable_type"] == "binary":
-        return ["bernoulli", "binomial"]
+        return ["binomial", "bernoulli"]
     else:
         return ["gaussian", "student_t"]
 
@@ -177,7 +160,7 @@ def run_inference():
     test_results = []
     for ii, vg in enumerate(variation_groups):
         st.info(
-            f"Running test {ii+1}/{n_tests}. ({st.session_state.control_group} vs {vg}, alpha={alpha})",
+            f"Running test {ii+1}/{n_tests}. ({st.session_state['control_group']} vs {vg}, alpha={alpha})",
             icon="🤖",
         )
         test = HypothesisTest(
@@ -218,6 +201,24 @@ def run_inference():
     st.session_state["test_results_df"] = test_results_df
 
 
+def plot_results():
+    if st.session_state["inference_method"] == "frequentist":
+        if st.session_state["variable_type"] == "binary":
+            layout = plot_frequentist_binary_results(st.session_state["test_results"])
+        elif st.session_state["variable_type"] == "continuous":
+            layout = plot_frequentist_continuous_results(
+                st.session_state["test_results"]
+            )
+        elif st.session_state["variable_type"] == "counts":
+            layout = plot_frequentist_counts_resuls(st.session_state["test_results"])
+    elif st.session_state["inference_method"] == "bootstrap":
+        layout = plot_bootstrap_results(st.session_state["test_results"])
+    elif st.session_state["inference_method"] == "bayesian":
+        layout = plot_bayesian_results(st.session_state["test_results"])
+
+    return st.write(hv.render(layout))
+
+
 reload_page()
 
 # -------- Dataset Specification -----------
@@ -225,7 +226,6 @@ reload_page()
 st.markdown(doc.intro)
 
 show_instructions = st.checkbox("**Show/Hide Instructions**")
-
 if show_instructions:
     st.markdown(doc.instructions.how_to_run_test)
 
@@ -243,7 +243,7 @@ load_dataset(dataset_file)
 
 if st.session_state.get("dataframe") is not None:
     expand_dataset_df = st.checkbox("Expand Data Table")
-    st.dataframe(st.session_state.dataframe, use_container_width=expand_dataset_df)
+    st.dataframe(st.session_state["dataframe"], use_container_width=expand_dataset_df)
     st.session_state["data"] = st.session_state["dataframe"].copy()
 
     if st.session_state.get("available_data_columns") is not None:
@@ -293,7 +293,9 @@ if st.session_state.get("dataframe") is not None:
                 help=doc.tooltip.select_treatment_column,
             )
 
-        if treatment_column is not None:
+        if st.session_state.get(
+            "treatment_column"
+        ) is not None and st.session_state.get("metric_column"):
             # Filter out any invalid treatment rows
             valid_treatment_mask = st.session_state["data"][treatment_column].notnull()
 
@@ -362,18 +364,18 @@ if st.session_state.get("dataframe") is not None:
                 )
             else:
                 control_samples = get_samples(
-                    st.session_state.data,
-                    st.session_state.metric_column,
-                    st.session_state.treatment_column,
-                    st.session_state.control_group,
+                    st.session_state["data"],
+                    st.session_state["metric_column"],
+                    st.session_state["treatment_column"],
+                    st.session_state["control_group"],
                 )
                 variation_samples = []
                 for treatment_name in st.session_state["variation_groups"]:
                     variation_samples.append(
                         get_samples(
-                            st.session_state.data,
-                            st.session_state.metric_column,
-                            st.session_state.treatment_column,
+                            st.session_state["data"],
+                            st.session_state["metric_column"],
+                            st.session_state["treatment_column"],
                             treatment_name,
                         )
                     )
