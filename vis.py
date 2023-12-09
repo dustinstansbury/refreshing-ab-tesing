@@ -616,14 +616,17 @@ def plot_bootstrap_results(results):
 
 def plot_bayesian_results(
     results,
-    include_prior: bool = False,
+    include_prior: bool = True,
 ):
     from spearmint.inference.bayesian.bayesian_inference import _get_delta_param
+    import streamlit as st
 
     control_name = f"{results[0].control.name} (control)"
     control_posterior = results[0].control_posterior
     credible_mass = 1 - results[0].alpha
     comparison_param = _get_delta_param(results[0].model_name)
+    min_x = np.inf
+    max_x = -np.inf
 
     delta_plots = []
     distribution_plots = []
@@ -634,6 +637,9 @@ def plot_bayesian_results(
             color=CONTROL_COLOR,
         )
     )
+
+    min_x = np.min((distribution_plots[-1].data["value"].min(), min_x))
+    max_x = np.max((distribution_plots[-1].data["value"].max(), max_x))
 
     # Confidence intervals
     distribution_plots.append(
@@ -647,6 +653,7 @@ def plot_bayesian_results(
     )
 
     max_pdf_height = 0.0
+
     for ii, result in enumerate(results):
         delta_samples = result.delta_posterior
         variation_name = result.variation.name
@@ -660,6 +667,9 @@ def plot_bayesian_results(
                 color=variation_color,
             )
         )
+
+        min_x = np.min((distribution_plots[-1].data["value"].min(), min_x))
+        max_x = np.max((distribution_plots[-1].data["value"].max(), max_x))
 
         distribution_plots.append(
             vis.plot_interval(
@@ -696,21 +706,21 @@ def plot_bayesian_results(
     ).opts(color=CONTROL_COLOR)
     delta_plots.append(vline)
 
+    distribution_plot = reduce(lambda x, y: x * y, distribution_plots)
+
     if include_prior:
-        distribution_plots.append(
-            vis.plot_kde(
-                samples=results[0].prior.data,
-                label="prior",
-                color=vis.COLORS.light_gray,
-            )
+        distribution_plot *= vis.plot_kde(
+            samples=results[0].prior.data,
+            label="Prior",
+            color=vis.COLORS.light_gray,
         )
 
-    distribution_plot = reduce(lambda x, y: x * y, distribution_plots)
     distribution_plot = distribution_plot.relabel(
         f"Posterior {comparison_param} Comparison"
     ).opts(
         legend_position="left",
         xlabel=f"Posterior {comparison_param}",
+        xlim=(min_x, max_x),
         ylabel="pdf",
     )
 

@@ -349,6 +349,16 @@ class tooltip:
         model provided 😉.
         """
 
+    set_bayesian_prior_mean = """
+        Set the mean of the prior. Defaults to the global mean across all treatments.
+        """
+
+    set_bayesian_prior_strength = """
+        Set the strength of the prior. Strong priors will encode more prior belief
+        that the expected value should be near the prior mean. Weaker priors
+        encode less prior belief.
+        """
+
     select_bayesian_parameters_estimation_method = """
         Select the parameter estimation method for Bayesian inference.
 
@@ -398,9 +408,17 @@ class warnings:
         Bootstrap inference is unavailable.
         
         Dataset contains {n_treatment_obs:,} observations for one of the treatments.
-        To ensure numerical stability " on this publicly-shared application, the
-        max number of observations for Bootstrap inference is limited to
-        {max_treatment_obs:,}.
+        To ensure numerical stability on this publicly-shared application, the
+        max number of observations for Bootstrap inference is limited to {max_treatment_obs:,}.
+        """
+
+    @staticmethod
+    def too_few_treatment_nobs_for_bootstrap(n_treatment_obs, min_treatment_obs):
+        return f"""
+        Bootstrap inference is unavailable.
+        
+        Dataset contains only {n_treatment_obs:,} observations for one of the treatments.
+        The minimum number of observations for Bootstrap inference is {min_treatment_obs:,}.
         """
 
     @staticmethod
@@ -412,4 +430,13 @@ class warnings:
         treatments. To ensure numerical stability on this publicly-shared
         application, the max number of observations for MCMC parameter estimation
         is limited to {max_mcmc_nobs:,}.
+        """
+
+    @staticmethod
+    def too_few_treatment_nobs_for_mcmc(n_treatment_obs, min_treatment_obs):
+        return f"""
+        MCMC parameter estimation is unavailable.
+        
+        Dataset contains only {n_treatment_obs:,} observations for one of the treatments.
+        The minimum number of observations for MCMC parameter estimation is {min_treatment_obs:,}.
         """

@@ -34,7 +34,9 @@ MPLPlot.sublabel_format = ""
 hv.extension("matplotlib")
 
 
+MIN_BOOTSTRAP_NOBS = 10
 MAX_BOOTSTRAP_NOBS = 10_000
+MIN_MCMC_NOBS = 10
 MAX_MCMC_NOBS = 5_000
 MAX_N_VARIATIONS = 20
 
@@ -69,8 +71,8 @@ def load_dataset(dataset_file):
         dataframe = load_csv(dataset_file)
         st.session_state["dataset_file"] = dataset_file
         st.session_state["dataframe"] = dataframe
-        st.session_state["data_columns"] = dataframe.columns.tolist()
-        st.session_state["available_data_columns"] = dataframe.columns.tolist()
+        st.session_state["data_columns"] = sorted(dataframe.columns.tolist())
+        st.session_state["available_data_columns"] = sorted(dataframe.columns.tolist())
 
 
 def summarize_samples(samples, use_container_width):
@@ -264,12 +266,16 @@ if st.session_state.get("dataframe") is not None:
             valid_metric_mask = st.session_state["data"][metric_column].notnull()
             n_invalid_metric = (~valid_metric_mask).sum()
             if n_invalid_metric > 0:
-                st.session_state["data"] = st.session_state["data"][valid_metric_mask]
-                st.warning(
-                    doc.warnings.removing_invalid_metrics(
-                        n_invalid_metric, metric_column
+                invalid_metric_filter_col, _ = st.columns(2)
+                with invalid_metric_filter_col:
+                    st.session_state["data"] = st.session_state["data"][
+                        valid_metric_mask
+                    ]
+                    st.warning(
+                        doc.warnings.removing_invalid_metrics(
+                            n_invalid_metric, metric_column
+                        )
                     )
-                )
 
             inferred_variable_type = infer_variable_type(
                 st.session_state["data"][metric_column]
@@ -299,16 +305,17 @@ if st.session_state.get("dataframe") is not None:
             # Filter out any invalid treatment rows
             valid_treatment_mask = st.session_state["data"][treatment_column].notnull()
 
+            st.session_state["data"] = st.session_state["data"][valid_treatment_mask]
             n_invalid_treatments = (~valid_treatment_mask).sum()
+
             if n_invalid_treatments > 0:
-                st.session_state["data"] = st.session_state["data"][
-                    valid_treatment_mask
-                ]
-                st.warning(
-                    doc.warnings.removing_invalid_treatments(
-                        n_invalid_treatments, treatment_column
+                invalid_treatment_filter_col, _ = st.columns(2)
+                with invalid_treatment_filter_col:
+                    st.warning(
+                        doc.warnings.removing_invalid_treatments(
+                            n_invalid_treatments, treatment_column
+                        )
                     )
-                )
 
             if pd.api.types.is_numeric_dtype(
                 st.session_state["data"][treatment_column].dtype
@@ -337,7 +344,7 @@ if st.session_state.get("dataframe") is not None:
             available_variation_groups = [
                 c for c in treatment_columns if c != control_group
             ]
-            # Update, so reset
+
             if control_group != old_control_group:
                 default_variation_groups = available_variation_groups
             else:
@@ -363,12 +370,13 @@ if st.session_state.get("dataframe") is not None:
                     doc.warnings.too_many_variations(n_variations, MAX_N_VARIATIONS)
                 )
             else:
-                control_samples = get_samples(
+                st.session_state["control_samples"] = control_samples = get_samples(
                     st.session_state["data"],
                     st.session_state["metric_column"],
                     st.session_state["treatment_column"],
                     st.session_state["control_group"],
                 )
+
                 variation_samples = []
                 for treatment_name in st.session_state["variation_groups"]:
                     variation_samples.append(
@@ -379,6 +387,19 @@ if st.session_state.get("dataframe") is not None:
                             treatment_name,
                         )
                     )
+                st.session_state["variation_samples"] = variation_samples
+
+                # Get sample sizes to filter out inference methods
+                st.session_state["all_samples"] = all_samples = [
+                    st.session_state["control_samples"]
+                ] + st.session_state["variation_samples"]
+
+                st.session_state["max_treatment_nobs"] = max_treatment_nobs = int(
+                    np.max([len(s.data) for s in all_samples])
+                )
+                st.session_state["min_treatment_nobs"] = min_treatment_nobs = int(
+                    np.min([len(s.data) for s in all_samples])
+                )
 
                 """### Data Summary"""
                 sbcol, spcol, _ = st.columns([0.15, 0.1, 0.8])  # Better way to do this?
@@ -444,20 +465,31 @@ if st.session_state.get("dataframe") is not None:
     if (st.session_state.get("metric_column") is not None) and (
         st.session_state.get("treatment_column") is not None
     ):
-        st.session_state["max_treatment_nobs"] = max_treatment_nobs = (
-            st.session_state["data"]
-            .groupby(st.session_state["treatment_column"])
-            .count()[st.session_state["metric_column"]]
-            .max()
-        )
-
-        if max_treatment_nobs > MAX_BOOTSTRAP_NOBS:
-            st.warning(
-                doc.warnings.too_many_treatment_nobs_for_bootstrap(
-                    max_treatment_nobs, MAX_BOOTSTRAP_NOBS
+        inference_warning_col, _ = st.columns(2)
+        with inference_warning_col:
+            if st.session_state["max_treatment_nobs"] > MAX_BOOTSTRAP_NOBS:
+                st.warning(
+                    doc.warnings.too_many_treatment_nobs_for_bootstrap(
+                        max_treatment_nobs, MAX_BOOTSTRAP_NOBS
+                    )
                 )
-            )
-            INFERENCE_METHODS.remove("bootstrap")
+                if "bootstrap" in INFERENCE_METHODS:
+                    INFERENCE_METHODS.remove("bootstrap")
+
+                if st.session_state.get("inference_method") == "bootstrap":
+                    st.session_state["inference_method"] = "frequentist"
+
+            if st.session_state["min_treatment_nobs"] < MIN_BOOTSTRAP_NOBS:
+                st.warning(
+                    doc.warnings.too_few_treatment_nobs_for_bootstrap(
+                        min_treatment_nobs, MIN_BOOTSTRAP_NOBS
+                    )
+                )
+                if "bootstrap" in INFERENCE_METHODS:
+                    INFERENCE_METHODS.remove("bootstrap")
+
+                if st.session_state.get("inference_method") == "bootstrap":
+                    st.session_state["inference_method"] = "frequentist"
 
     icol, ocol = st.columns(2)
 
@@ -513,6 +545,90 @@ if st.session_state.get("dataframe") is not None:
             )
             inference_params["bayesian_model_name"] = bayesian_model_name
 
+            def prior_mean_slider():
+                global_mean = st.session_state["data"][
+                    st.session_state["metric_column"]
+                ].mean()
+                global_std = st.session_state["data"][
+                    st.session_state["metric_column"]
+                ].std()
+
+                def _get_params():
+                    if st.session_state["bayesian_model_name"] in (
+                        "binomial",
+                        "bernoulli",
+                    ):
+                        return 0.0, 1.0, global_mean
+                    else:
+                        return (
+                            global_mean - 2 * global_std,
+                            global_mean + 2 * global_std,
+                            global_mean,
+                        )
+
+                return st.slider(
+                    f"Prior mean\n\n(Data mean={global_mean:1.2f})",
+                    *_get_params(),
+                    help=doc.tooltip.set_bayesian_prior_mean,
+                )
+
+            def prior_params_slider(prior_mean):
+                prior_strength = st.select_slider(
+                    "Prior Strength",
+                    options=["very weak", "weak", "medium", "strong", "very strong"],
+                    value="weak",
+                    help=doc.tooltip.set_bayesian_prior_strength,
+                )
+
+                if st.session_state["bayesian_model_name"] in ("binomial", "bernoulli"):
+                    prior_alpha = {
+                        "very weak": 1,
+                        "weak": 4,
+                        "medium": 8,
+                        "strong": 16,
+                        "very strong": 32,
+                    }[prior_strength]
+                    prior_beta = prior_alpha * (1 - prior_mean) / prior_mean
+                    return {"prior_alpha": prior_alpha, "prior_beta": prior_beta}
+
+                if st.session_state["bayesian_model_name"] == "poisson":
+                    prior_alpha = {
+                        "very weak": np.exp(1),
+                        "weak": np.exp(2),
+                        "medium": np.exp(4),
+                        "strong": np.exp(8),
+                        "very strong": np.exp(16),
+                    }[prior_strength]
+
+                    prior_beta = prior_mean / prior_alpha
+
+                    return {"prior_alpha": prior_alpha, "prior_beta": 1 / prior_beta}
+
+                if st.session_state["bayesian_model_name"] in ("gaussian", "student_t"):
+                    global_std = st.session_state["data"][
+                        st.session_state["metric_column"]
+                    ].std()
+
+                    prior_std = {
+                        "very weak": global_std * 4.0,
+                        "weak": global_std * 2.0,
+                        "medium": global_std,
+                        "strong": global_std / 2.0,
+                        "very strong": global_std / 4.0,
+                    }[prior_strength]
+
+                return {"prior_mean": prior_mean, "prior_var": prior_std**2}
+
+            st.session_state[
+                "bayesian_prior_mean"
+            ] = bayesian_prior_mean = prior_mean_slider()
+
+            st.session_state[
+                "bayesian_prior_params"
+            ] = bayesian_prior_params = prior_params_slider(bayesian_prior_mean)
+
+            # prior_variance_slider = st.slider("Set the prior variance", get_prior_variance_params())
+
             # parameter estimation method
             parameter_estimation_choices = get_bayesian_parameter_estimation_choices()
             if st.session_state["max_treatment_nobs"] > MAX_MCMC_NOBS:
@@ -521,8 +637,17 @@ if st.session_state.get("dataframe") is not None:
                         max_treatment_nobs, MAX_MCMC_NOBS
                     )
                 )
+                if "mcmc" in parameter_estimation_choices:
+                    parameter_estimation_choices.remove("mcmc")
 
-                parameter_estimation_choices.remove("mcmc")
+            if min_treatment_nobs < MIN_MCMC_NOBS:
+                st.warning(
+                    doc.warnings.too_few_treatment_nobs_for_mcmc(
+                        min_treatment_nobs, MIN_MCMC_NOBS
+                    )
+                )
+                if "mcmc" in parameter_estimation_choices:
+                    parameter_estimation_choices.remove("mcmc")
 
             st.session_state[
                 "bayesian_parameter_estimation_method"
@@ -532,9 +657,30 @@ if st.session_state.get("dataframe") is not None:
                 index=0,
                 help=doc.tooltip.select_bayesian_parameters_estimation_method,
             )
+
+            # This is a bit of a hack to get around inconsistent API in spearmint
+            # for analytic/pymc models
+            # TODO: fix/remove with once spearmint fixes inconsistency
+            if (
+                st.session_state["bayesian_model_name"] in ("gaussian", "student_t")
+            ) and (
+                st.session_state["bayesian_parameter_estimation_method"] != "analytic"
+            ):
+                bayesian_prior_params["prior_mean_mu"] = bayesian_prior_params[
+                    "prior_mean"
+                ]
+                bayesian_prior_params["prior_var_mu"] = bayesian_prior_params[
+                    "prior_var"
+                ]
+                del bayesian_prior_params["prior_mean"]
+                del bayesian_prior_params["prior_var"]
+
+            inference_params["bayesian_model_params"] = bayesian_prior_params
+
             inference_params[
                 "bayesian_parameter_estimation_method"
             ] = bayesian_parameter_estimation_method
+
         st.session_state["inference_params"] = inference_params
 
     # -------- Analysis -----------
@@ -553,15 +699,18 @@ if st.session_state.get("dataframe") is not None:
         """### 📊 Test Results"""
         plot_results()
 
-        rcol1, rcol2 = st.columns([0.2, 0.8])
+        rcol1, rcol2 = st.columns([0.3, 0.7])
 
         with rcol1:
             """### Test Summary"""
             summary = st.session_state["test_results_df"][
-                ["hypothesis", "accept_hypothesis"]
+                ["hypothesis", "delta", "delta_relative", "accept_hypothesis"]
             ]
             summary.loc[:, "accept_hypothesis"] = summary["accept_hypothesis"].apply(
                 lambda x: "✅" if x else "❌"
+            )
+            summary.rename(
+                columns={"delta_relative": "delta relative (%)"}, inplace=True
             )
             st.dataframe(summary)
 
