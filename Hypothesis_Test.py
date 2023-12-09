@@ -28,7 +28,7 @@ import doc
 
 # Until streamlit supports Bokeh 3,
 # we use matplotlib backend for plots.
-# This overloads the setting spearmint.cfg::vis:vis_backend
+# This coarsely overloads the setting spearmint.cfg::vis:vis_backend
 warnings.filterwarnings("ignore", module="holoviews")
 MPLPlot.sublabel_format = ""
 hv.extension("matplotlib")
@@ -36,7 +36,8 @@ hv.extension("matplotlib")
 
 MIN_BOOTSTRAP_NOBS = 10
 MAX_BOOTSTRAP_NOBS = 10_000
-MIN_MCMC_NOBS = 10
+MIN_ANALYTIC_NOBS = 2
+MIN_MCMC_NOBS = 1
 MAX_MCMC_NOBS = 5_000
 MAX_N_VARIATIONS = 20
 
@@ -405,8 +406,7 @@ if st.session_state.get("dataframe") is not None:
                 sbcol, spcol, _ = st.columns([0.15, 0.1, 0.8])  # Better way to do this?
                 with sbcol:
                     use_container_width = st.checkbox("Expand Summary Table")
-                with spcol:
-                    _plot_samples = st.checkbox("Plot Samples")
+
                 sumcol, plotcol = st.columns(2)
                 with sumcol:
                     summarize_samples(
@@ -415,12 +415,9 @@ if st.session_state.get("dataframe") is not None:
                     )
 
                 with plotcol:
-                    if _plot_samples:
-                        st.write(
-                            plot_samples(
-                                control_samples, variation_samples, variable_type
-                            )
-                        )
+                    st.write(
+                        plot_samples(control_samples, variation_samples, variable_type)
+                    )
 
     # -------- Hypothesis Specification -----------
 
@@ -640,6 +637,15 @@ if st.session_state.get("dataframe") is not None:
                 if "mcmc" in parameter_estimation_choices:
                     parameter_estimation_choices.remove("mcmc")
 
+            if min_treatment_nobs < MIN_ANALYTIC_NOBS:
+                st.warning(
+                    doc.warnings.too_few_treatment_nobs_for_analytic(
+                        min_treatment_nobs, MIN_ANALYTIC_NOBS
+                    )
+                )
+                if "analytic" in parameter_estimation_choices:
+                    parameter_estimation_choices.remove("analytic")
+
             if min_treatment_nobs < MIN_MCMC_NOBS:
                 st.warning(
                     doc.warnings.too_few_treatment_nobs_for_mcmc(
@@ -709,9 +715,7 @@ if st.session_state.get("dataframe") is not None:
             summary.loc[:, "accept_hypothesis"] = summary["accept_hypothesis"].apply(
                 lambda x: "✅" if x else "❌"
             )
-            summary.rename(
-                columns={"delta_relative": "delta relative (%)"}, inplace=True
-            )
+            summary = summary.rename(columns={"delta_relative": "delta relative (%)"})
             st.dataframe(summary)
 
         with rcol2:

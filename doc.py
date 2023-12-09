@@ -431,6 +431,15 @@ class warnings:
         """
 
     @staticmethod
+    def too_few_treatment_nobs_for_analytic(n_treatment_obs, min_treatment_obs):
+        return f"""
+        Analytic parameter estimation is unavailable.
+
+        Dataset contains only {n_treatment_obs:,} observations for one of the treatments.
+        The minimum number of observations for Analytic parameter estimation is {min_treatment_obs:,}.
+        """
+
+    @staticmethod
     def too_many_nobs_for_mcmc(max_treatment_nobs, max_mcmc_nobs):
         return f"""
         MCMC parameter estimation is unavailable.
@@ -445,7 +454,7 @@ class warnings:
     def too_few_treatment_nobs_for_mcmc(n_treatment_obs, min_treatment_obs):
         return f"""
         MCMC parameter estimation is unavailable.
-        
+
         Dataset contains only {n_treatment_obs:,} observations for one of the treatments.
         The minimum number of observations for MCMC parameter estimation is {min_treatment_obs:,}.
         """
