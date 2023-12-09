@@ -140,7 +140,13 @@ To run a test, you'll need to:
     > For this Bayesian test, which models {variable_type} variables, the Bayesian
     model used is the hierarchical {bayesian_model_name} model. This model
     attempts to estimate from the data the distribution over `{central_tendency_param}`,
-    which describes the expected {expectation_description}. 
+    which describes the expected {expectation_description}.
+    >
+    > The light gray line shows the Prior distribution based on the settings
+    configured above. Weak priors will be flatter, and cover more of the
+    probability space, and thus encode more uncertainty about the true parameter
+    value. Strong priors will be narrower, and thus encode more prior belief
+    about the true value of the parameter.
     > 
     > Under each posterior distribution is a (1-`alpha`)% highest density interval
     (HDI) indicating where most of the probability mass is located under each
@@ -350,13 +356,16 @@ class tooltip:
         """
 
     set_bayesian_prior_mean = """
-        Set the mean of the prior. Defaults to the global mean across all treatments.
+        Set the mean of the prior. This is the value that we believe, before seeing
+        any data, that the value would likely take. Defaults to the global
+        mean of the dataset, calculated across all treatments.
         """
 
     set_bayesian_prior_strength = """
-        Set the strength of the prior. Strong priors will encode more prior belief
-        that the expected value should be near the prior mean. Weaker priors
-        encode less prior belief.
+        Set the strength of the prior. Strong priors will be narrower around the
+        Prior Mean, and encode stronger prior belief that the true value of the
+        parameter should be near the prior mean. Weaker priors are less certain
+        about the true parameter value, and are thus flatter.
         """
 
     select_bayesian_parameters_estimation_method = """
