@@ -814,11 +814,14 @@ if st.session_state.get("dataframe") is not None:
         plot_summary()
         plot_results()
 
+        default_show_interpretation_toggle_value = st.session_state.get(
+            "show_interpretation_instructions", False
+        )
         st.session_state[
             "show_interpretation_instructions"
         ] = show_interpretation_instructions = st.toggle(
             "Show how to interpret Test Results",
-            value=st.session_state.get("show_interpretation_instructions", False),
+            value=default_show_interpretation_toggle_value,
             help=doc.tooltip.show_interpretations,
         )
 
@@ -832,9 +835,10 @@ if st.session_state.get("dataframe") is not None:
                     )
                 )
 
+        default_show_details_value = st.session_state.get("show_details", False)
         st.session_state["show_details"] = show_details = st.toggle(
             "Show Test Details",
-            value=st.session_state.get("show_details", False),
+            value=default_show_details_value,
             help=doc.tooltip.show_test_details,
         )
 
