@@ -169,7 +169,6 @@ def run_inference():
             for ii, vg in enumerate(variation_groups):
                 st.write(
                     f"Running test {ii+1}/{n_tests}. ({st.session_state['control_group']} vs {vg}, alpha={alpha})",
-                    icon="🤖",
                 )
                 test = HypothesisTest(
                     control=st.session_state["control_group"],
@@ -569,7 +568,7 @@ if st.session_state.get("dataframe") is not None:
     ):
         inference_warning_col, _ = st.columns(2)
         with inference_warning_col:
-            if st.session_state["max_treatment_nobs"] > MAX_BOOTSTRAP_NOBS:
+            if st.session_state.get("max_treatment_nobs", 0) > MAX_BOOTSTRAP_NOBS:
                 st.warning(
                     doc.warnings.too_many_treatment_nobs_for_bootstrap(
                         max_treatment_nobs, MAX_BOOTSTRAP_NOBS
@@ -736,7 +735,7 @@ if st.session_state.get("dataframe") is not None:
 
             # parameter estimation method
             parameter_estimation_choices = get_bayesian_parameter_estimation_choices()
-            if st.session_state["max_treatment_nobs"] > MAX_MCMC_NOBS:
+            if st.session_state.get("max_treatment_nobs", 0) > MAX_MCMC_NOBS:
                 st.warning(
                     doc.warnings.too_many_nobs_for_mcmc(
                         max_treatment_nobs, MAX_MCMC_NOBS
@@ -816,14 +815,13 @@ if st.session_state.get("dataframe") is not None:
         plot_summary()
         plot_results()
 
-        show_interpretation_instructions = st.toggle(
+        st.session_state[
+            "show_interpretation_instructions"
+        ] = show_interpretation_instructions = st.toggle(
             "Show how to interpret Test Results",
             value=st.session_state.get("show_interpretation_instructions", False),
             help=doc.tooltip.show_interpretations,
         )
-        st.session_state[
-            "show_interpretation_instructions"
-        ] = show_interpretation_instructions
 
         if show_interpretation_instructions and st.session_state["inference_available"]:
             icol, _ = st.columns(2)
@@ -844,7 +842,6 @@ if st.session_state.get("dataframe") is not None:
         if show_details and st.session_state["inference_available"]:
             """#### Details"""
             st.dataframe(st.session_state["test_results_df"])
-
 else:
     st.write("No dataset specified, please load one from a file.")
 
