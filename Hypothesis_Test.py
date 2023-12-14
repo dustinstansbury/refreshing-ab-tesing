@@ -193,7 +193,6 @@ def run_inference():
                 )
                 st.write(
                     f"Running Multiple-comparison correction using `{mc_correction_method}` method.",
-                    icon="🤖",
                 )
 
                 test_group_results = experiment.run_test_group(test_group, alpha=alpha)
