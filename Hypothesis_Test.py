@@ -700,7 +700,8 @@ if st.session_state.get("dataframe") is not None:
         help=doc.tooltip.show_interpretations,
     )
     if run_analysis:
-        run_inference()
+        with st.spinner("Running analysis..."):
+            run_inference()
 
         """### 📊 Test Results"""
         plot_results()
