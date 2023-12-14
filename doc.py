@@ -13,18 +13,38 @@ supports many different inference methods and variable types.
 
 class instructions:
     how_to_run_test = """
-To run a test, you'll need to:
+    To run a test, you'll need to:
 
-1. 📁 **Import a Dataset** csv file from you computer.
-2. 🔍 **Specify the data columns** that define the **metric** and **treatment groups** in your study.
-3. 💡**Specify your Hypothesis**, including comparison type and acceptable alpha. Or, just use the defaults.
-4. 🛠️ **Configure the Inference Procedure**. You can use **frequentist**, **bootstrap**, or **Bayesian** inference methods. Or, just use the defaults.
-5. ⚡️ **Run the Analysis** and interpret the reported results
-"""
+    1. 📁 **Import a Dataset** csv file from you computer.
+    2. 🔍 **Specify the data columns** that define the **metric** and **treatment groups** in your study.
+    3. 💡**Specify your Hypothesis**, including comparison type and acceptable alpha. Or, just use the defaults.
+    4. 🛠️ **Configure the Inference Procedure**. You can use **frequentist**, **bootstrap**, or **Bayesian** inference methods. Or, just use the defaults.
+    5. ⚡️ **Run the Analysis** and interpret the reported results
+    """
+
+    interpret_test_summary = """
+    ##### Top Row - Test Summary
+    
+    > The row of metrics on the left gives a high-level summary of the test results.
+    The far left metric shows the mean for the control group. The remaining metrics
+    show the mean for the variations. Below each is the relative delta--reported in percent--
+    when compared to the control.
+    > 
+    > Variation group names with a "🟢" or "🔴" next to
+    them indicate a statistically significant difference from the control. For one-tailed
+    tests (`"larger"` and `"smaller"`), "🟢" indicates a significant effect in the
+    direction of the hypothesis (e.g. a significant decrease when the hypothesis
+    is `"smaller"`). For two-tailed tests "🔴" indicates a significant decrease, 
+    while "🟢" indicates a significant increase.
+    """
+
     interpret_frequentist_results_template = """
     ---
     
     ### Interpreting Frequentist Test Results
+    
+    {interpret_test_summary}
+    
     
     ##### Left Plot - Sample Distribution & Central Tendency Estimates
     
@@ -57,28 +77,18 @@ To run a test, you'll need to:
     Confidence intervals that do not overlap with the `Null {comparison_type}`
     provide a visual indicator that a variant is statisticaly different from the
     control group.
-    
-    ##### Left Table - Test Summary
-    
-    > The table on the left gives a high-level summary of the test results,
-    including the test comparison type/direction, and the decision of whether
-    to accept ✅ or not accept ❌ the hypothesis in light of the dataset.
-    
-    ##### Right Table - Details
-    
-    > The table on the right provides detailed information about the quantities
-    used to run the inference. The structure of this table will change depending
-    on the type of inference method that is used.
-    
-    >
+
     > For additional details on Frequentist Inference, please refer to the 
     > [Frequentist Inference wiki page](https://en.wikipedia.org/wiki/Frequentist_inference).
+    
     """
 
     interpret_bootstrap_results_template = """
     ---
     
     ### Interpreting Bootstrap Test Results
+    
+    {interpret_test_summary}
     
     ##### Left Plot - Sample Distribution & Central Tendency Estimates
     
@@ -110,18 +120,6 @@ To run a test, you'll need to:
     do not overlap with the `Null {comparison_type}` provide a visual indicator
     that a variant is statisticaly different from the control group.
     
-    ##### Left Table - Test Summary
-    
-    > The table on the left gives a high-level summary of the test results,
-    including the test comparison type/direction, and the decision of whether
-    to accept ✅ or not accept ❌ the hypothesis in light of the dataset.
-    
-    ##### Right Table - Details
-    
-    > The table on the right provides detailed information about the quantities
-    used to run the inference. The structure of this table will change depending
-    on the type of inference method that is used.
-    >
     > For additional details on Bootstrap Inference, please refer to the
     > [Bootstrap Inference wiki page](https://en.wikipedia.org/wiki/Bootstrapping_\(statistics\)).
     """
@@ -130,6 +128,8 @@ To run a test, you'll need to:
     ---
     
     ### Interpreting Bayesian Test Results
+    
+    {interpret_test_summary}
 
     ##### Left Plot - Sample Distribution & Central Tendency Estimates
     
@@ -171,19 +171,7 @@ To run a test, you'll need to:
     interval (HDI). HDIs that do not overlap with the `Null {comparison_type}`
     provide a visual indicator that a variant is statisticaly different from the
     control group.
-    
-    ##### Left Table - Test Summary
-    
-    > The table on the left gives a high-level summary of the test results,
-    including the test comparison type/direction, and the decision of whether
-    to accept ✅ or not accept ❌ the hypothesis in light of the dataset.
-    
-    ##### Right Table - Details
-    
-    > The table on the right provides detailed information about the quantities
-    used to run the inference. The structure of this table will change depending
-    on the type of inference method that is used.
-    
+
     >
     > For additional details on Bayesian Inference, please refer to the 
     > [Bayesian Inference wiki page](https://en.wikipedia.org/wiki/Bayesian_inference)
@@ -220,6 +208,7 @@ To run a test, you'll need to:
                 null_comparison_value = 0
 
             return instructions.interpret_frequentist_results_template.format(
+                interpret_test_summary=instructions.interpret_test_summary,
                 variable_type=variable_type,
                 parametric_distribution=parametric_distribution,
                 central_tendency_param=central_tendency_param,
@@ -230,7 +219,9 @@ To run a test, you'll need to:
         elif inference_method == "bootstrap":
             comparison_type = "Delta"
             return instructions.interpret_bootstrap_results_template.format(
-                comparison_type=comparison_type, null_comparison_value=0
+                interpret_test_summary=instructions.interpret_test_summary,
+                comparison_type=comparison_type,
+                null_comparison_value=0,
             )
         elif inference_method == "bayesian":
             if variable_type == "counts":
@@ -249,6 +240,7 @@ To run a test, you'll need to:
                 expectation_description = "value on any given trial"
 
             return instructions.interpret_bayesian_results_template.format(
+                interpret_test_summary=instructions.interpret_test_summary,
                 variable_type=variable_type,
                 comparison_type="Delta",
                 null_comparison_value=0,
@@ -381,7 +373,13 @@ class tooltip:
         """
 
     show_interpretations = """
-        Show documentation on how to interpret the results
+        Provide detailed overview of the results, and how to interpret them.
+        """
+
+    show_test_details = """
+        Display a dataframe of various metrics and statistics returned by the
+        inference procedure. The fields in the dataframe will depend on the
+        inference procedure used.
         """
 
 

@@ -39,7 +39,7 @@ MAX_BOOTSTRAP_NOBS = 10_000
 MIN_ANALYTIC_NOBS = 2
 MIN_MCMC_NOBS = 1
 MAX_MCMC_NOBS = 5_000
-MAX_N_VARIATIONS = 20
+MAX_N_VARIATIONS = 11
 
 
 def reload_page():
@@ -66,7 +66,6 @@ def get_samples(df, metric_column, treatment_column, variation_name):
 def load_dataset(dataset_file):
     if dataset_file is None:
         st.session_state = {}
-        # dataset_file = st.session_state.get("dataset_file")
 
     if dataset_file is not None:
         dataframe = load_csv(dataset_file)
@@ -122,6 +121,7 @@ def get_mc_correction():
             st.session_state.get("mc_correction_method", "sidak")
         ),
         help=doc.tooltip.select_mc_correction,
+        on_change=unset_inference_available,
     )
     st.session_state["mc_correction_method"] = mc_correction_method
     return mc_correction_method
@@ -161,44 +161,52 @@ def run_inference():
     )
     tests = []
     test_results = []
-    for ii, vg in enumerate(variation_groups):
-        st.info(
-            f"Running test {ii+1}/{n_tests}. ({st.session_state['control_group']} vs {vg}, alpha={alpha})",
-            icon="🤖",
-        )
-        test = HypothesisTest(
-            control=st.session_state["control_group"],
-            variation=vg,
-            metric=st.session_state["metric_column"],
-            treatment=st.session_state["treatment_column"],
-            variable_type=st.session_state["variable_type"],
-            hypothesis=st.session_state["hypothesis"],
-            inference_method=st.session_state["inference_method"],
-            **st.session_state["inference_params"],
-        )
-        tests.append(test)
-        test_results.append(experiment.run_test(test, alpha=alpha))
+    acol, _ = st.columns([0.4, 0.6])
+    with acol:
+        with st.status(
+            "Running analyses (click for details)...", state="running"
+        ) as status:
+            for ii, vg in enumerate(variation_groups):
+                st.write(
+                    f"Running test {ii+1}/{n_tests}. ({st.session_state['control_group']} vs {vg}, alpha={alpha})",
+                    icon="🤖",
+                )
+                test = HypothesisTest(
+                    control=st.session_state["control_group"],
+                    variation=vg,
+                    metric=st.session_state["metric_column"],
+                    treatment=st.session_state["treatment_column"],
+                    variable_type=st.session_state["variable_type"],
+                    hypothesis=st.session_state["hypothesis"],
+                    inference_method=st.session_state["inference_method"],
+                    **st.session_state["inference_params"],
+                )
+                tests.append(test)
+                test_results.append(experiment.run_test(test, alpha=alpha))
 
-    mc_correction_method = st.session_state["inference_params"].get(
-        "mc_correction_method"
-    )
-    if mc_correction_method is not None:
-        test_group = HypothesisTestGroup(
-            tests=tests,
-            correction_method=mc_correction_method,
-        )
-        st.info(
-            f"Running Multiple-comparison correction using `{mc_correction_method}` method.",
-            icon="🤖",
-        )
-        test_group_results = experiment.run_test_group(test_group, alpha=alpha)
-        test_results = test_group_results.corrected_results
+            mc_correction_method = st.session_state["inference_params"].get(
+                "mc_correction_method"
+            )
+            if mc_correction_method is not None:
+                test_group = HypothesisTestGroup(
+                    tests=tests,
+                    correction_method=mc_correction_method,
+                )
+                st.write(
+                    f"Running Multiple-comparison correction using `{mc_correction_method}` method.",
+                    icon="🤖",
+                )
 
-    st.session_state["test_results"] = test_results
-    test_results_df = pd.concat(
-        [tr.to_dataframe() for tr in test_results],
-        axis=0,
-    )
+                test_group_results = experiment.run_test_group(test_group, alpha=alpha)
+                test_results = test_group_results.corrected_results
+
+            st.session_state["test_results"] = test_results
+            test_results_df = pd.concat(
+                [tr.to_dataframe() for tr in test_results],
+                axis=0,
+            )
+            status.update(label="Analysis Complete 👍", state="complete", expanded=False)
+
     test_results_df.index = variation_groups
     test_results_df.index.name = "variation"
     st.session_state["test_results_df"] = test_results_df
@@ -222,15 +230,93 @@ def plot_results():
     return st.write(hv.render(layout))
 
 
+def plot_summary():
+    # st.dataframe(st.session_state["test_results_df"])
+
+    summary = st.session_state["test_results_df"][
+        [
+            "hypothesis",
+            "control_name",
+            "control_mean",
+            "variation_mean",
+            "delta",
+            "delta_relative",
+            "accept_hypothesis",
+        ]
+    ]
+    control_name = summary.control_name.values[0]
+    control_mean = summary.control_mean.values[0]
+
+    n_conditions = summary.shape[0]
+    if n_variations > 9:
+        metric_col_width = 1 / (n_conditions + 1)
+    else:
+        metric_col_width = 0.1
+
+    col_widths = [metric_col_width] * (n_conditions + 1)
+
+    all_metrics_width = np.sum(col_widths)
+
+    remaining_width = [max((0, 1 - all_metrics_width))]
+    col_widths = col_widths + remaining_width
+    col_widths = [cw for cw in col_widths if cw]
+
+    cols = st.columns(col_widths)
+    # st.write(col_widths, all_metrics_width, remaining_width)
+
+    cols[0].metric(label=f"{control_name} (control)", value=f"{control_mean:1.4f}")
+
+    for ii, col in enumerate(cols[1:-1]):
+        # st.write(ii, summary)
+        s = summary.iloc[ii]
+        hypothesis = s["hypothesis"]
+        delta_color = "normal"
+        if hypothesis == "smaller":
+            delta_color = "inverse"
+        if hypothesis == "unequal":
+            delta_color = "off"
+
+        # For display we calculate the relative delta from the means,
+        # rather than using the test. This facilitates interpetation for rates
+        # tests whose deltas are not absolute, but as ratios of the control
+        # delta_relative = s["delta_relative"]
+        delta_relative = (
+            100 * (s["variation_mean"] - control_mean) / np.abs(control_mean)
+        )
+        tag = ""
+        if s.accept_hypothesis:
+            if hypothesis == "unequal":
+                if delta_relative > 0:
+                    tag = "🟢"
+                else:
+                    tag = "🔴"
+            else:
+                tag = "🟢"
+
+        col.metric(
+            label=f"{s.name} {tag}",
+            value=round(s["variation_mean"], 4),
+            delta=f"{delta_relative:1.4} %",
+            delta_color=delta_color,
+        )
+
+
+def unset_inference_available():
+    st.session_state["inference_available"] = False
+
+
 reload_page()
 
-# -------- Dataset Specification -----------
+# -------- Instructions -----------
 
 st.markdown(doc.intro)
 
-show_instructions = st.checkbox("**Show/Hide Instructions**")
+show_instructions = st.toggle("**Show/Hide Instructions**")
 if show_instructions:
     st.markdown(doc.instructions.how_to_run_test)
+
+
+# -------- Dataset Specification -----------
 
 lcol, _, _ = st.columns(3)
 
@@ -245,7 +331,7 @@ with lcol:
 load_dataset(dataset_file)
 
 if st.session_state.get("dataframe") is not None:
-    expand_dataset_df = st.checkbox("Expand Data Table")
+    expand_dataset_df = st.toggle("Expand Data Table")
     st.dataframe(st.session_state["dataframe"], use_container_width=expand_dataset_df)
     st.session_state["data"] = st.session_state["dataframe"].copy()
 
@@ -259,6 +345,7 @@ if st.session_state.get("dataframe") is not None:
                 [st.session_state.get("metric_column", None)]
                 + st.session_state["available_data_columns"],
                 help=doc.tooltip.select_metric_column,
+                on_change=unset_inference_available,
             )
 
         inferred_variable_type = "continuous"
@@ -288,6 +375,7 @@ if st.session_state.get("dataframe") is not None:
                 VARIABLE_TYPES,
                 index=VARIABLE_TYPES.index(inferred_variable_type),
                 help=doc.tooltip.select_metric_variable_type,
+                on_change=unset_inference_available,
             )
             st.session_state["variable_type"] = variable_type
 
@@ -298,6 +386,7 @@ if st.session_state.get("dataframe") is not None:
                 [st.session_state.get("treatment_column", None)]
                 + st.session_state["available_data_columns"],
                 help=doc.tooltip.select_treatment_column,
+                on_change=unset_inference_available,
             )
 
         if st.session_state.get(
@@ -340,6 +429,7 @@ if st.session_state.get("dataframe") is not None:
                         treatment_columns, st.session_state.get("control_group")
                     ),
                     help=doc.tooltip.select_control_group,
+                    on_change=unset_inference_available,
                 )
 
             available_variation_groups = [
@@ -363,6 +453,7 @@ if st.session_state.get("dataframe") is not None:
                     available_variation_groups,
                     default=default_variation_groups,
                     help=doc.tooltip.select_variation_groups,
+                    on_change=unset_inference_available,
                 )
             st.session_state["n_variations"] = n_variations = len(variation_groups)
 
@@ -403,9 +494,9 @@ if st.session_state.get("dataframe") is not None:
                 )
 
                 """### Data Summary"""
-                sbcol, spcol, _ = st.columns([0.15, 0.1, 0.8])  # Better way to do this?
+                sbcol, _ = st.columns([0.2, 0.8])  # Better way to do this?
                 with sbcol:
-                    use_container_width = st.checkbox("Expand Summary Table")
+                    use_container_width = st.toggle("Expand Summary Table")
 
                 sumcol, plotcol = st.columns(2)
                 with sumcol:
@@ -438,6 +529,7 @@ if st.session_state.get("dataframe") is not None:
                 label="Comparison Type",
                 options=HYPOTHESIS_OPTIONS.keys(),
                 help=doc.tooltip.select_comparison_type,
+                on_change=unset_inference_available,
             )
         ]
 
@@ -451,6 +543,7 @@ if st.session_state.get("dataframe") is not None:
             format="%1.3f",
             label_visibility="visible",
             help=doc.tooltip.set_alpha,
+            on_change=unset_inference_available,
         )
 
     # -------- Inference Specification -----------
@@ -458,7 +551,6 @@ if st.session_state.get("dataframe") is not None:
     INFERENCE_METHODS = ["frequentist", "bootstrap", "bayesian"]
 
     """## 🛠️ Inference Procedure"""
-
     if (st.session_state.get("metric_column") is not None) and (
         st.session_state.get("treatment_column") is not None
     ):
@@ -498,6 +590,7 @@ if st.session_state.get("dataframe") is not None:
             index=INFERENCE_METHODS.index(
                 st.session_state.get("inference_method", "frequentist")
             ),
+            on_change=unset_inference_available,
             help=doc.tooltip.select_inference_method,
         )
 
@@ -524,6 +617,7 @@ if st.session_state.get("dataframe") is not None:
                 label="Statistic Function",
                 value="""np.mean""",
                 help=doc.tooltip.define_statistic_function,
+                on_change=unset_inference_available,
             )
             statistic_function = compile_statistic_function(statistic_function_text)
             inference_params["statistic_function"] = statistic_function
@@ -539,6 +633,7 @@ if st.session_state.get("dataframe") is not None:
                 model_choices,
                 index=0,
                 help=doc.tooltip.select_bayesian_model,
+                on_change=unset_inference_available,
             )
             inference_params["bayesian_model_name"] = bayesian_model_name
 
@@ -567,6 +662,7 @@ if st.session_state.get("dataframe") is not None:
                     f"Prior mean\n\n(Data mean={global_mean:1.2f})",
                     *_get_params(),
                     help=doc.tooltip.set_bayesian_prior_mean,
+                    on_change=unset_inference_available,
                 )
 
             def prior_params_slider(prior_mean):
@@ -575,6 +671,7 @@ if st.session_state.get("dataframe") is not None:
                     options=["very weak", "weak", "medium", "strong", "very strong"],
                     value="weak",
                     help=doc.tooltip.set_bayesian_prior_strength,
+                    on_change=unset_inference_available,
                 )
 
                 if st.session_state["bayesian_model_name"] in ("binomial", "bernoulli"):
@@ -624,8 +721,6 @@ if st.session_state.get("dataframe") is not None:
                 "bayesian_prior_params"
             ] = bayesian_prior_params = prior_params_slider(bayesian_prior_mean)
 
-            # prior_variance_slider = st.slider("Set the prior variance", get_prior_variance_params())
-
             # parameter estimation method
             parameter_estimation_choices = get_bayesian_parameter_estimation_choices()
             if st.session_state["max_treatment_nobs"] > MAX_MCMC_NOBS:
@@ -662,6 +757,7 @@ if st.session_state.get("dataframe") is not None:
                 parameter_estimation_choices,
                 index=0,
                 help=doc.tooltip.select_bayesian_parameters_estimation_method,
+                on_change=unset_inference_available,
             )
 
             # This is a bit of a hack to get around inconsistent API in spearmint
@@ -692,38 +788,31 @@ if st.session_state.get("dataframe") is not None:
     # -------- Analysis -----------
 
     """## ⚡️ Analysis"""
+    racol, sicol, _ = st.columns([0.1, 0.3, 0.6])
 
-    run_analysis = st.button(label="Run Analysis", help=doc.tooltip.run_analysis)
-    show_interpretation_instructions = st.checkbox(
-        "Show how to interpret Test Results",
-        value=True,
-        help=doc.tooltip.show_interpretations,
-    )
+    with racol:
+        run_analysis = st.button(label="Run Analysis", help=doc.tooltip.run_analysis)
+
     if run_analysis:
-        with st.spinner("Running analysis..."):
-            run_inference()
+        run_inference()
+        st.session_state["inference_available"] = True
 
+    if st.session_state.get("inference_available", False):
         """### 📊 Test Results"""
+
+        plot_summary()
         plot_results()
 
-        rcol1, rcol2 = st.columns([0.3, 0.7])
+        show_interpretation_instructions = st.toggle(
+            "Show how to interpret Test Results",
+            value=st.session_state.get("show_interpretation_instructions", False),
+            help=doc.tooltip.show_interpretations,
+        )
+        st.session_state[
+            "show_interpretation_instructions"
+        ] = show_interpretation_instructions
 
-        with rcol1:
-            """### Test Summary"""
-            summary = st.session_state["test_results_df"][
-                ["hypothesis", "delta", "delta_relative", "accept_hypothesis"]
-            ]
-            summary.loc[:, "accept_hypothesis"] = summary["accept_hypothesis"].apply(
-                lambda x: "✅" if x else "❌"
-            )
-            summary = summary.rename(columns={"delta_relative": "delta relative (%)"})
-            st.dataframe(summary)
-
-        with rcol2:
-            """#### Details"""
-            st.dataframe(st.session_state["test_results_df"])
-
-        if show_interpretation_instructions:
+        if show_interpretation_instructions and st.session_state["inference_available"]:
             icol, _ = st.columns(2)
             with icol:
                 st.write(
@@ -733,6 +822,15 @@ if st.session_state.get("dataframe") is not None:
                     )
                 )
 
+        st.session_state["show_details"] = show_details = st.toggle(
+            "Show Test Details",
+            value=st.session_state.get("show_details", False),
+            help=doc.tooltip.show_test_details,
+        )
+
+        if show_details and st.session_state["inference_available"]:
+            """#### Details"""
+            st.dataframe(st.session_state["test_results_df"])
 
 else:
     st.write("No dataset specified, please load one from a file.")
