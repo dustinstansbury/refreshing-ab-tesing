@@ -264,7 +264,11 @@ def plot_summary():
     cols = st.columns(col_widths)
     # st.write(col_widths, all_metrics_width, remaining_width)
 
-    cols[0].metric(label=f"{control_name} (control)", value=f"{control_mean:1.4f}")
+    cols[0].metric(
+        label=f"{control_name} (control)",
+        value=f"{control_mean:1.4f}",
+        help="Control Group Mean",
+    )
 
     for ii, col in enumerate(cols[1:-1]):
         # st.write(ii, summary)
@@ -284,8 +288,10 @@ def plot_summary():
             100 * (s["variation_mean"] - control_mean) / np.abs(control_mean)
         )
         tag = ""
+        comp_string = "than"
         if s.accept_hypothesis:
             if hypothesis == "unequal":
+                comp_string = "to"
                 if delta_relative > 0:
                     tag = "🟢"
                 else:
@@ -293,11 +299,18 @@ def plot_summary():
             else:
                 tag = "🟢"
 
+        tooltip = f"""
+        Variation `{s.name}` shows a {delta_relative:.1f}% change compared to the control.
+
+        We conclude the hypothesis that `{control_name}` is {hypothesis} {comp_string} `{s.name}`
+        to be {s.accept_hypothesis} {tag}
+        """
         col.metric(
             label=f"{s.name} {tag}",
             value=round(s["variation_mean"], 4),
             delta=f"{delta_relative:1.4} %",
             delta_color=delta_color,
+            help=tooltip,
         )
 
 

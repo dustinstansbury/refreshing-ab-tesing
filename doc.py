@@ -6,7 +6,7 @@ intro = """
 
 _Powered by [spearmint](https://github.com/dustinstansbury/spearmint)_
 
-Use this simple app to run AB tests using your own datasets. The app
+Use this simple app to run AB tests using your own dataset. The app
 supports many different inference methods and variable types.
 """
 
@@ -25,7 +25,7 @@ class instructions:
     interpret_test_summary = """
     ##### Top Row - Test Summary
     
-    > The row of metrics on the left gives a high-level summary of the test results.
+    > The row of metrics on the top row give a high-level summary of the test results.
     The far left metric shows the mean for the control group. The remaining metrics
     show the mean for the variations. Below each is the relative delta--reported in percent--
     when compared to the control.
