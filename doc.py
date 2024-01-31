@@ -1,6 +1,9 @@
 """Instructions and tooltips"""
 
 
+NEGATIVE_RESULT_TAG = "❌"
+POSITIVE_RESULT_TAG = "✅"
+
 intro = """
 # Easy AB Testing
 
@@ -22,7 +25,7 @@ class instructions:
     5. ⚡️ **Run the Analysis** and interpret the reported results
     """
 
-    interpret_test_summary = """
+    interpret_test_summary = f"""
     ##### Top Row - Test Summary
     
     > The row of metrics on the top row give a high-level summary of the test results.
@@ -30,12 +33,12 @@ class instructions:
     show the mean for the variations. Below each is the relative delta--reported in percent--
     when compared to the control.
     > 
-    > Variation group names with a "🟢" or "🔴" next to
-    them indicate a statistically significant difference from the control. For one-tailed
-    tests (`"larger"` and `"smaller"`), "🟢" indicates a significant effect in the
+    > Variation group names with a {POSITIVE_RESULT_TAG} next to
+    them indicate a statistically significant result. For one-tailed
+    tests (`"larger"` and `"smaller"`), {POSITIVE_RESULT_TAG} indicates a significant effect in the
     direction of the hypothesis (e.g. a significant decrease when the hypothesis
-    is `"smaller"`). For two-tailed tests "🔴" indicates a significant decrease, 
-    while "🟢" indicates a significant increase.
+    is `"smaller"`). For two-tailed tests {POSITIVE_RESULT_TAG} indicates a significant difference in either direction.
+    Results with a {NEGATIVE_RESULT_TAG} indicated a statistically insignificant result. 
     """
 
     interpret_frequentist_results_template = """

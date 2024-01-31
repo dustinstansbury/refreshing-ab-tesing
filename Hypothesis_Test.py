@@ -41,9 +41,6 @@ MIN_MCMC_NOBS = 1
 MAX_MCMC_NOBS = 5_000
 MAX_N_VARIATIONS = 11
 
-NEGATIVE_RESULT_TAG = "❌"
-POSITIVE_RESULT_TAG = "✅"
-
 
 def reload_page():
     st.set_page_config(layout="wide")
@@ -319,34 +316,19 @@ def plot_summary():
         # st.write(ii, summary)
         s = summary.iloc[ii]
         hypothesis = s["hypothesis"]
-        delta_color = "normal"
-        if hypothesis == "smaller":
-            delta_color = "inverse"
-        if hypothesis == "unequal":
-            delta_color = "off"
 
-        # For display we calculate the relative delta from the means,
-        # rather than using the test. This facilitates interpetation for rates
-        # tests whose deltas are not absolute, but as ratios of the control
-        # delta_relative = s["delta_relative"]
         delta = s["variation_mean"] - control_mean
-        delta_relative = 100 * delta / np.abs(control_mean)
-        tag = NEGATIVE_RESULT_TAG
-        comp_string = "than"
-        if s.accept_hypothesis:
-            if hypothesis == "unequal":
-                comp_string = "to"
-                if delta_relative > 0:
-                    tag = POSITIVE_RESULT_TAG
-                else:
-                    tag = NEGATIVE_RESULT_TAG
-            else:
-                tag = POSITIVE_RESULT_TAG
 
+        delta_relative = 100 * delta / np.abs(control_mean)
+
+        tag = (
+            doc.POSITIVE_RESULT_TAG if s.accept_hypothesis else doc.NEGATIVE_RESULT_TAG
+        )
+        comp_string = "to" if hypothesis == "unequal" else "than"
         change = "increase" if delta_relative > 0 else "decrease"
         tooltip = f"""
-        Variation `{s.name}` shows a {np.abs(delta_relative):.1f}% relative {change} compared to the control
-        (absolute {change} of {np.abs(delta):.1f}).
+        Variation `{s.name}` shows a {np.abs(delta_relative):.2f}% relative {change} compared to the control
+        (absolute {change} of {np.abs(delta):.2f}).
 
         We thus conclude the hypothesis that `{control_name}` is {hypothesis} {comp_string} `{s.name}`
         to be {s.accept_hypothesis} {tag}
@@ -355,7 +337,7 @@ def plot_summary():
             label=f"{s.name} {tag}",
             value=round(s["variation_mean"], 4),
             delta=f"{delta_relative:1.4} %",
-            delta_color=delta_color,
+            # delta_color=delta_color,
             help=tooltip,
         )
 
