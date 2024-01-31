@@ -1,3 +1,2 @@
-- [ ] Fix summary output for Bayesian results (currently just reporting means)
 - [ ] Power Analysis Tab
 - [ ] Silence server warnings for matplotlib backend

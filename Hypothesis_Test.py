@@ -41,6 +41,9 @@ MIN_MCMC_NOBS = 1
 MAX_MCMC_NOBS = 5_000
 MAX_N_VARIATIONS = 11
 
+NEGATIVE_RESULT_TAG = "❌"
+POSITIVE_RESULT_TAG = "✅"
+
 
 def reload_page():
     st.set_page_config(layout="wide")
@@ -229,6 +232,7 @@ def plot_results():
 
 
 def get_summary():
+    inference_method = st.session_state["inference_method"]
     test_results_df = st.session_state["test_results_df"][
         [
             "hypothesis",
@@ -240,45 +244,48 @@ def get_summary():
             "accept_hypothesis",
         ]
     ]
-    if st.session_state["inference_method"] == "frequentist":
+    if inference_method == "frequentist":
         return test_results_df
 
-    elif st.session_state["inference_method"] == "bootstrap":
-        results = st.session_state["test_results"]
+    results = st.session_state["test_results"]
 
-        # Empty summary
-        summary_df = pd.DataFrame(columns=test_results_df.columns)
+    # Empty summary dataframe
+    summary_df = pd.DataFrame(columns=test_results_df.columns)
 
+    if inference_method == "bootstrap":
         control_samples = results[0].aux["control_bootstrap_samples"]
-        control_mean = control_samples.mean
-        control_name = f"{results[0].control.name}"
+    elif inference_method == "bayesian":
+        control_samples = results[0].control_posterior
 
-        # Fill summary with variation results
-        for result in results:
+    control_mean = control_samples.mean
+    control_name = f"{results[0].control.name}"
+
+    # Fill summary with variation results
+    for result in results:
+        if inference_method == "bootstrap":
             variation_samples = result.aux["variation_bootstrap_samples"]
-            variation_name = result.variation.name
-            variation_mean = variation_samples.mean
-            delta = variation_mean - control_mean
-            delta_relative = delta / np.abs(control_mean)
-            result_df = pd.DataFrame(
-                {
-                    "hypothesis": result.hypothesis,
-                    "control_name": control_name,
-                    "control_mean": control_mean,
-                    "variation_mean": variation_mean,
-                    "delta": delta,
-                    "delta_relative": delta_relative,
-                    "accept_hypothesis": result.accept_hypothesis,
-                },
-                index=[variation_name],
-            )
+        elif inference_method == "bayesian":
+            variation_samples = result.variation_posterior
 
-            summary_df = pd.concat([summary_df, result_df], axis=0)
-        return summary_df
+        variation_name = result.variation.name
+        variation_mean = variation_samples.mean
+        delta = variation_mean - control_mean
+        delta_relative = delta / np.abs(control_mean)
+        result_df = pd.DataFrame(
+            {
+                "hypothesis": result.hypothesis,
+                "control_name": control_name,
+                "control_mean": control_mean,
+                "variation_mean": variation_mean,
+                "delta": delta,
+                "delta_relative": delta_relative,
+                "accept_hypothesis": result.accept_hypothesis,
+            },
+            index=[variation_name],
+        )
 
-    elif st.session_state["inference_method"] == "bayesian":
-        pass
-    return test_results_df
+        summary_df = pd.concat([summary_df, result_df], axis=0)
+    return summary_df
 
 
 def plot_summary():
@@ -301,7 +308,6 @@ def plot_summary():
     col_widths = [cw for cw in col_widths if cw]
 
     cols = st.columns(col_widths)
-    # st.write(col_widths, all_metrics_width, remaining_width)
 
     cols[0].metric(
         label=f"{control_name} (control)",
@@ -323,25 +329,26 @@ def plot_summary():
         # rather than using the test. This facilitates interpetation for rates
         # tests whose deltas are not absolute, but as ratios of the control
         # delta_relative = s["delta_relative"]
-        delta_relative = (
-            100 * (s["variation_mean"] - control_mean) / np.abs(control_mean)
-        )
-        tag = ""
+        delta = s["variation_mean"] - control_mean
+        delta_relative = 100 * delta / np.abs(control_mean)
+        tag = NEGATIVE_RESULT_TAG
         comp_string = "than"
         if s.accept_hypothesis:
             if hypothesis == "unequal":
                 comp_string = "to"
                 if delta_relative > 0:
-                    tag = "🟢"
+                    tag = POSITIVE_RESULT_TAG
                 else:
-                    tag = "🔴"
+                    tag = NEGATIVE_RESULT_TAG
             else:
-                tag = "🟢"
+                tag = POSITIVE_RESULT_TAG
 
+        change = "increase" if delta_relative > 0 else "decrease"
         tooltip = f"""
-        Variation `{s.name}` shows a {delta_relative:.1f}% change compared to the control.
+        Variation `{s.name}` shows a {np.abs(delta_relative):.1f}% relative {change} compared to the control
+        (absolute {change} of {np.abs(delta):.1f}).
 
-        We conclude the hypothesis that `{control_name}` is {hypothesis} {comp_string} `{s.name}`
+        We thus conclude the hypothesis that `{control_name}` is {hypothesis} {comp_string} `{s.name}`
         to be {s.accept_hypothesis} {tag}
         """
         col.metric(
