@@ -228,10 +228,8 @@ def plot_results():
     return st.write(hv.render(layout))
 
 
-def plot_summary():
-    # st.dataframe(st.session_state["test_results_df"])
-
-    summary = st.session_state["test_results_df"][
+def get_summary():
+    test_results_df = st.session_state["test_results_df"][
         [
             "hypothesis",
             "control_name",
@@ -242,6 +240,49 @@ def plot_summary():
             "accept_hypothesis",
         ]
     ]
+    if st.session_state["inference_method"] == "frequentist":
+        return test_results_df
+
+    elif st.session_state["inference_method"] == "bootstrap":
+        results = st.session_state["test_results"]
+
+        # Empty summary
+        summary_df = pd.DataFrame(columns=test_results_df.columns)
+
+        control_samples = results[0].aux["control_bootstrap_samples"]
+        control_mean = control_samples.mean
+        control_name = f"{results[0].control.name}"
+
+        # Fill summary with variation results
+        for result in results:
+            variation_samples = result.aux["variation_bootstrap_samples"]
+            variation_name = result.variation.name
+            variation_mean = variation_samples.mean
+            delta = variation_mean - control_mean
+            delta_relative = delta / np.abs(control_mean)
+            result_df = pd.DataFrame(
+                {
+                    "hypothesis": result.hypothesis,
+                    "control_name": control_name,
+                    "control_mean": control_mean,
+                    "variation_mean": variation_mean,
+                    "delta": delta,
+                    "delta_relative": delta_relative,
+                    "accept_hypothesis": result.accept_hypothesis,
+                },
+                index=[variation_name],
+            )
+
+            summary_df = pd.concat([summary_df, result_df], axis=0)
+        return summary_df
+
+    elif st.session_state["inference_method"] == "bayesian":
+        pass
+    return test_results_df
+
+
+def plot_summary():
+    summary = get_summary()
     control_name = summary.control_name.values[0]
     control_mean = summary.control_mean.values[0]
 
