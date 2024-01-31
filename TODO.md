@@ -1,3 +1,2 @@
 - [ ] Power Analysis Tab
-- [ ] Silence server warnings for matplotlib backend
 - [ ] Add warnings for when normality assumption is violated

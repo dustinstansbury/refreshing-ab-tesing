@@ -1,3 +1,6 @@
+import logging
+
+
 import warnings
 import numpy as np
 import scipy as sp
@@ -29,6 +32,8 @@ import doc
 # Until streamlit supports Bokeh 3,
 # we use matplotlib backend for plots.
 # This coarsely overloads the setting spearmint.cfg::vis:vis_backend
+logging.getLogger("param.main").setLevel(logging.CRITICAL)
+logging.getLogger("param").setLevel(logging.CRITICAL)
 warnings.filterwarnings("ignore", module="holoviews")
 MPLPlot.sublabel_format = ""
 hv.extension("matplotlib")
