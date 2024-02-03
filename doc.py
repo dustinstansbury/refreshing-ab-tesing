@@ -261,7 +261,7 @@ class tooltip:
         """
 
     select_metric_column = """
-        Select the column in your dataset that "defines the target metric that
+        Select the column in your dataset that defines the target metric that
         you'd like to compare across treatment groups.
         """
 
