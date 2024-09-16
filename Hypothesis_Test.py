@@ -70,7 +70,7 @@ def get_samples(df, metric_column, treatment_column, variation_name):
 
 def load_dataset(dataset_file):
     if dataset_file is None:
-        st.session_state = {}
+        dataset_file = "data/demo.csv"
 
     if dataset_file is not None:
         dataframe = load_csv(dataset_file)
@@ -368,11 +368,15 @@ lcol, _, _ = st.columns(3)
 
 with lcol:
     """## 📁 Dataset"""
-    dataset_file = st.file_uploader(
-        label="Choose a dataset file to import",
-        type=["csv", "tsv"],
-        help=doc.tooltip.file_upload,
-    )
+    data_select = st.selectbox("Pick Dataset", ["Use Demo", "Choose Local File"])
+    if data_select == "Choose Local File":
+        dataset_file = st.file_uploader(
+            label="Choose a dataset file to import",
+            type=["csv", "tsv"],
+            help=doc.tooltip.file_upload,
+        )
+    else:
+        dataset_file = None
 
 load_dataset(dataset_file)
 
